@@ -51,7 +51,9 @@ if [ "x$CHECK_UPDATE" = "x" ]; then
     echo $NEWSUM
     if [ "x$NEWSUM" != "x" ]; then
         if [ $SUM != $NEWSUM ]; then
-#            wget https://raw.githubusercontent.com/aogburn/yatda/master/yatda.sh
+            echo "Version difference detected.  Downloading new version. Please re-run yatda."
+            wget -q https://raw.githubusercontent.com/aogburn/yatda/master/yatda.sh -O $DIR/yatda.sh
+            exit
         fi
     fi
     echo "Check complete."
