@@ -78,49 +78,49 @@ fi
 # Here we'll whip up some thread usage stats
 
 DUMP_COUNT=`grep "$DUMP_NAME" $FILE_NAME | wc -l`
-echo "Number of thread dumps: " $DUMP_COUNT > yatda-$FILE_NAME
+echo "Number of thread dumps: " $DUMP_COUNT > $FILE_NAME.yatda
 
 THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | wc -l`
-echo "Total number of threads: " $THREAD_COUNT >> yatda-$FILE_NAME
+echo "Total number of threads: " $THREAD_COUNT >> $FILE_NAME.yatda
 
 REQUEST_THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | egrep "$REQUEST_THREAD_NAME" | wc -l`
-echo "Total number of request threads: " $REQUEST_THREAD_COUNT >> yatda-$FILE_NAME
+echo "Total number of request threads: " $REQUEST_THREAD_COUNT >> $FILE_NAME.yatda
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     REQUEST_COUNT=`grep "$REQUEST_TRACE" $FILE_NAME | wc -l`
-    echo "Total number of in process requests: " $REQUEST_COUNT >> yatda-$FILE_NAME
+    echo "Total number of in process requests: " $REQUEST_COUNT >> $FILE_NAME.yatda
 
     REQUEST_PERCENT=`printf %.2f "$((10**4 * $REQUEST_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
-    echo "Percent of present request threads in use for requests: " $REQUEST_PERCENT >> yatda-$FILE_NAME
+    echo "Percent of present request threads in use for requests: " $REQUEST_PERCENT >> $FILE_NAME.yatda
 
     if [ $DUMP_COUNT -gt 1 ]; then
-        echo "Average number of in process requests per thread dump: " `expr $REQUEST_COUNT / $DUMP_COUNT` >> yatda-$FILE_NAME
-        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` >> yatda-$FILE_NAME
-        echo "Average number of threads per thread dump: " `expr $THREAD_COUNT / $DUMP_COUNT` >> yatda-$FILE_NAME
+        echo "Average number of in process requests per thread dump: " `expr $REQUEST_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+        echo "Average number of threads per thread dump: " `expr $THREAD_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
     fi
 fi
 #end stats
 
 
 # Here we'll try to point out any specific known issues
-echo >> yatda-$FILE_NAME
-echo "## Specific findings ##" >> yatda-$FILE_NAME
+echo >> $FILE_NAME.yatda
+echo "## Specific findings ##" >> $FILE_NAME.yatda
 i=1
 
 # request thread default and core count
 if [[ $REQUEST_THREAD_COUNT -gt 0 && `expr $REQUEST_THREAD_COUNT % 16` == 0 ]]; then
 NUMBER_CORES=`expr $REQUEST_THREAD_COUNT / 16`
 NUMBER_CORES=`expr $NUMBER_CORES / $DUMP_COUNT`
-    echo >> yatda-$FILE_NAME
-    echo $((i++)) ": The number of present request threads is a multple of 16 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores." >> yatda-$FILE_NAME
+    echo >> $FILE_NAME.yatda
+    echo $((i++)) ": The number of present request threads is a multple of 16 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores." >> $FILE_NAME.yatda
 fi
 
 
 # request thread exhaustion
 if [ $REQUEST_COUNT -gt 0 ] && [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
 #if [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
-    echo >> yatda-$FILE_NAME
-    echo $((i++)) ": The number of processing requests is equal to the number of present request threads.  This may indicate thread pool exhaustion so the task-max-threads may need to be increased (https://access.redhat.com/solutions/2455451)." >> yatda-$FILE_NAME
+    echo >> $FILE_NAME.yatda
+    echo $((i++)) ": The number of processing requests is equal to the number of present request threads.  This may indicate thread pool exhaustion so the task-max-threads may need to be increased (https://access.redhat.com/solutions/2455451)." >> $FILE_NAME.yatda
 fi
 
 
@@ -129,26 +129,26 @@ fi
 
 # check java.util.Arrays.copyOf calls
 
-echo >> yatda-$FILE_NAME
+echo >> $FILE_NAME.yatda
 # end Findings
 
 
 # This returns counts of the top line from all request thread stacks
-echo "## Top lines of request threads ##" >> yatda-$FILE_NAME
-egrep "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> yatda-$FILE_NAME
-echo >> yatda-$FILE_NAME
+echo "## Top lines of request threads ##" >> $FILE_NAME.yatda
+egrep "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+echo >> $FILE_NAME.yatda
 
 # This returns counts of the unique 20 top lines from all request thread stacks
-echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" >> yatda-$FILE_NAME
-egrep "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> yatda-$FILE_NAME
-echo >> yatda-$FILE_NAME
+echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" >> $FILE_NAME.yatda
+egrep "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+echo >> $FILE_NAME.yatda
 
 
 # This returns counts of the top line from all thread stacks
-echo "## Top lines of all threads ##" >> yatda-$FILE_NAME
-grep "$ALL_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> yatda-$FILE_NAME
-echo >> yatda-$FILE_NAME
+echo "## Top lines of all threads ##" >> $FILE_NAME.yatda
+grep "$ALL_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+echo >> $FILE_NAME.yatda
 
 # This returns counts of the unique 20 top lines from all request thread stacks
-echo "## Most common from first $ALL_LINE_COUNT lines of all threads ##" >> yatda-$FILE_NAME
-grep "$ALL_THREAD_NAME" -A `expr $ALL_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> yatda-$FILE_NAME
+echo "## Most common from first $ALL_LINE_COUNT lines of all threads ##" >> $FILE_NAME.yatda
+grep "$ALL_THREAD_NAME" -A `expr $ALL_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
