@@ -13,11 +13,12 @@
 
 # default string references to search for generic EAP 7 request stats
 DUMP_NAME="Full thread dump "
-#ALL_THREAD_NAME=" nid="
 ALL_THREAD_NAME=" nid=0x"
 REQUEST_THREAD_NAME="default task-"
 REQUEST_TRACE="io.undertow.server.Connectors.executeRootHandler"
 REQUEST_COUNT=0
+SPECIFIED_THREAD_COUNT=0
+SPECIFIED_USE_COUNT=0
 SPECIFIED_LINE_COUNT=20
 ALL_LINE_COUNT=10
 
@@ -26,7 +27,7 @@ ALL_LINE_COUNT=10
 while getopts t:s:n:a:f: flag
 do
     case "${flag}" in
-        t) SPECIFIED_THREAD=${OPTARG};;
+        t) SPECIFIED_THREAD_NAME=${OPTARG};;
         s) SPECIFIED_TRACE=${OPTARG};;
         n) SPECIFIED_LINE_COUNT=${OPTARG};;
         a) ALL_LINE_COUNT=${OPTARG};;
@@ -40,7 +41,7 @@ if [ "x$FILE_NAME" = "x" ]; then
 fi
 
 # Check for a new yatda.sh.  Uncomment next line if you want to avoid this check
-# CHECK_UPDATE="false"
+ CHECK_UPDATE="false"
 if [ "x$CHECK_UPDATE" = "x" ]; then
     echo "Checking update. Uncomment CHECK_UPDATE in script if you wish to skip."
     DIR=`dirname "$(readlink -f "$0")"`
@@ -99,6 +100,25 @@ if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
         echo "Average number of threads per thread dump: " `expr $THREAD_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
     fi
 fi
+
+if [ "x$SPECIFIED_THREAD_NAME" != "x" ]; then
+    echo >> $FILE_NAME.yatda
+    SPECIFIED_THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | egrep "$SPECIFIED_THREAD_NAME" | wc -l`
+    echo "Total number of $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_THREAD_COUNT >> $FILE_NAME.yatda
+
+    if [[ "x$SPECIFIED_TRACE" != x && $SPECIFIED_THREAD_COUNT -gt 0 ]]; then
+        SPECIFIED_USE_COUNT=`grep "$SPECIFIED_TRACE" $FILE_NAME | wc -l`
+        echo "Total number of in process $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_USE_COUNT >> $FILE_NAME.yatda
+
+        SPECIFIED_PERCENT=`printf %.2f "$((10**4 * $SPECIFIED_USE_COUNT / $SPECIFIED_THREAD_COUNT ))e-2" `
+        echo "Percent of present $SPECIFIED_THREAD_NAME threads in use: " $SPECIFIED_PERCENT >> $FILE_NAME.yatda
+
+        if [ $DUMP_COUNT -gt 1 ]; then
+            echo "Average number of in process $SPECIFIED_THREAD_NAME threads per thread dump: " `expr $SPECIFIED_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+            echo "Average number of $SPECIFIED_THREAD_COUNT threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+        fi
+    fi
+fi
 #end stats
 
 
@@ -133,15 +153,30 @@ echo >> $FILE_NAME.yatda
 # end Findings
 
 
-# This returns counts of the top line from all request thread stacks
-echo "## Top lines of request threads ##" >> $FILE_NAME.yatda
-egrep "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
-echo >> $FILE_NAME.yatda
+if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
+    # This returns counts of the top line from all request thread stacks
+    echo "## Top lines of request threads ##" >> $FILE_NAME.yatda
+    egrep "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+    echo >> $FILE_NAME.yatda
 
-# This returns counts of the unique 20 top lines from all request thread stacks
-echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" >> $FILE_NAME.yatda
-egrep "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
-echo >> $FILE_NAME.yatda
+    # This returns counts of the unique 20 top lines from all request thread stacks
+    echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" >> $FILE_NAME.yatda
+    egrep "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+    echo >> $FILE_NAME.yatda
+fi
+
+
+if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
+    # This returns counts of the top line from all request thread stacks
+    echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" >> $FILE_NAME.yatda
+    egrep "\"$SPECIFIED_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+    echo >> $FILE_NAME.yatda
+
+    # This returns counts of the unique 20 top lines from all request thread stacks
+    echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" >> $FILE_NAME.yatda
+    egrep "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+    echo >> $FILE_NAME.yatda
+fi
 
 
 # This returns counts of the top line from all thread stacks
