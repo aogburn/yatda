@@ -41,7 +41,7 @@ if [ "x$FILE_NAME" = "x" ]; then
 fi
 
 # Check for a new yatda.sh.  Uncomment next line if you want to avoid this check
- CHECK_UPDATE="false"
+# CHECK_UPDATE="false"
 if [ "x$CHECK_UPDATE" = "x" ]; then
     echo "Checking update. Uncomment CHECK_UPDATE in script if you wish to skip."
     DIR=`dirname "$(readlink -f "$0")"`
@@ -187,3 +187,23 @@ echo >> $FILE_NAME.yatda
 # This returns counts of the unique 20 top lines from all request thread stacks
 echo "## Most common from first $ALL_LINE_COUNT lines of all threads ##" >> $FILE_NAME.yatda
 grep "$ALL_THREAD_NAME" -A `expr $ALL_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+
+
+# Focus on EAP boot threads
+echo  >> $FILE_NAME.yatda
+echo "## EAP BOOT THREAD INFO ##" >> $FILE_NAME.yatda
+echo  >> $FILE_NAME.yatda
+COUNT=`grep "ServerService Thread Pool " $FILE_NAME | wc -l`
+if [ $COUNT -gt 0 ]; then
+    echo "Number of ServerService threads: " $COUNT >> $FILE_NAME.yatda
+    echo "## Most common from first 10 lines of ServerService threads ##" >> $FILE_NAME.yatda
+    grep "ServerService Thread Pool " -A 11 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+    echo  >> $FILE_NAME.yatda
+fi
+
+COUNT=`grep "MSC service thread " $FILE_NAME | wc -l`
+if [ $COUNT -gt 0 ]; then
+    echo "Number of MSC service threads: " $COUNT >> $FILE_NAME.yatda
+    echo "## Most common from first 10 lines of MSC threads ##" >> $FILE_NAME.yatda
+    grep "MSC service thread " -A 11 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+fi
