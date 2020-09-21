@@ -196,6 +196,9 @@ echo  >> $FILE_NAME.yatda
 COUNT=`grep "ServerService Thread Pool " $FILE_NAME | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo "Number of ServerService threads: " $COUNT >> $FILE_NAME.yatda
+    if [ $DUMP_COUNT -gt 1 ]; then
+        echo "Average number of ServerService threads per thread dump: " `expr $COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+    fi
     echo "## Most common from first 10 lines of ServerService threads ##" >> $FILE_NAME.yatda
     grep "ServerService Thread Pool " -A 11 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
     echo  >> $FILE_NAME.yatda
@@ -204,6 +207,22 @@ fi
 COUNT=`grep "MSC service thread " $FILE_NAME | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo "Number of MSC service threads: " $COUNT >> $FILE_NAME.yatda
+
+    TASK_COUNT=`grep "org.jboss.msc.service.ServiceControllerImpl\\$ControllerTask.run" $FILE_NAME | wc -l`
+    echo "Total number of running ControllerTasks: " $TASK_COUNT >> $FILE_NAME.yatda
+
+    MSC_PERCENT=`printf %.2f "$((10**4 * $TASK_COUNT / $COUNT ))e-2" `
+    echo "Percent of present MSC threads in use: " $MSC_PERCENT >> $FILE_NAME.yatda
+
+
+    if [ $DUMP_COUNT -gt 1 ]; then
+        echo "Average number of MSC service threads per thread dump: " `expr $COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+    fi
+    if [[ `expr $COUNT % 2` == 0 ]]; then
+        NUMBER_CORES=`expr $COUNT / 2`
+        NUMBER_CORES=`expr $NUMBER_CORES / $DUMP_COUNT`
+        echo "*The number of present MSC threads is a multple of 2 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores. If these are all in use during start up, the thread pool may need to be increased via -Dorg.jboss.server.bootstrap.maxThreads and -Djboss.msc.max.container.threads properties per https://access.redhat.com/solutions/508413." >> $FILE_NAME.yatda
+    fi
     echo "## Most common from first 10 lines of MSC threads ##" >> $FILE_NAME.yatda
     grep "MSC service thread " -A 11 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
 fi
