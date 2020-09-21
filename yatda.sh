@@ -24,9 +24,10 @@ ALL_LINE_COUNT=10
 
 
 # flags
-while getopts t:s:n:a:f: flag
+while getopts r:t:s:n:a:f: flag
 do
     case "${flag}" in
+        r) REQUEST_THREAD_NAME=${OPTARG};;
         t) SPECIFIED_THREAD_NAME=${OPTARG};;
         s) SPECIFIED_TRACE=${OPTARG};;
         n) SPECIFIED_LINE_COUNT=${OPTARG};;
