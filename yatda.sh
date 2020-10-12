@@ -145,10 +145,36 @@ if [ $REQUEST_COUNT -gt 0 ] && [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
 fi
 
 
+# check EJB strict max pool exhaustion
+COUNT=`grep "at org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get" $FILE_NAME | wc -l`
+if [ $COUNT -gt 0 ]; then
+    echo >> $FILE_NAME.yatda
+    echo $((i++)) ": The amount of threads waiting for an EJB instance in org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get is $COUNT.  This indicates an EJB instance pool needs to be increased for the load (https://access.redhat.com/solutions/255033).  Check other threads actively processing in org.jboss.as.ejb3.component.pool.PooledInstanceInterceptor.processInvocation to see if EJB instances are used up in any specific calls." >> $FILE_NAME.yatda
+fi
+
+
 # check datasource exhaustion
+COUNT=`grep "at org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire" $FILE_NAME | wc -l`
+if [ $COUNT -gt 0 ]; then
+    echo >> $FILE_NAME.yatda
+    echo $((i++)) ": The amount of threads waiting for a datasource connection in org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire is $COUNT.  This indicates a datasource pool needs to be increased for the load or connections are being leaked or used too long (https://access.redhat.com/solutions/17782)." >> $FILE_NAME.yatda
+fi
+
+
+# check log contention
+COUNT=`grep "at org.jboss.logmanager.handlers.WriterHandler.doPublish" $FILE_NAME | wc -l`
+if [ $COUNT -gt 0 ]; then
+    echo >> $FILE_NAME.yatda
+    echo $((i++)) ": The amount of threads in org.jboss.logmanager.handlers.WriterHandler.doPublish is $COUNT.  High amounts of threads here may indicate logging that is too verbose and/or log writes that are too slow.  Consider decreasing log verbosity or configure an async log handler (https://access.redhat.com/solutions/444033) to limit response time impacts from log writes." >> $FILE_NAME.yatda
+fi
 
 
 # check java.util.Arrays.copyOf calls
+COUNT=`grep "at java.util.Arrays.copyOf" $FILE_NAME | wc -l`
+if [ $COUNT -gt 0 ]; then
+    echo >> $FILE_NAME.yatda
+    echo $((i++)) ": The amount of threads in java.util.Arrays.copyOf is $COUNT.  Notable amounts of threads here or a significant time spent here in any thread may indicate a lot of time blocked in safe point pausing for GC because of little free heap space or the Array copies and other activity generating excessive amounts of temporary heap garbage.  GC logs should be reviewed to confirm or rule out GC performance concerns." >> $FILE_NAME.yatda
+fi
 
 echo >> $FILE_NAME.yatda
 # end Findings
