@@ -3,7 +3,7 @@
 # Yatda is just Yet Another Thread Dump Analyzer.  It focuses on 
 # providing quick JBoss EAP 7 specific statistics and known concerns.
 #
-# Usage: sh ./yatda.sh <THREAD_DUMP_FILE_NAME>
+# Usage: sh ./yatda.sh -f <THREAD_DUMP_FILE_NAME>
 #    -f: thead dump file name
 #    -t: specify a thread name to focus on
 #    -s: specify a particular generic line indicating thread usage
