@@ -1,17 +1,11 @@
 #!/bin/bash
 #
 # Yatda is just Yet Another Thread Dump Analyzer.  It focuses on 
-# providing quick JBoss EAP 7 specific statistics and known concerns.
+# providing quick JBoss EAP 7+ specific statistics and known concerns.
 #
 # Usage: sh ./yatda.sh <THREAD_DUMP_FILE_NAME>
-#    -f: thead dump file name
-#    -t: specify a thread name to focus on
-#    -s: specify a particular generic line indicating thread usage
-#    -n: number of stack lines to focus on from specified threads
-#    -a: number of stack lines to focus on from all threads
-#
 
-# default string references to search for generic EAP 7 request stats
+# default string references to search for generic EAP 7+ request stats
 DUMP_NAME="Full thread dump "
 ALL_THREAD_NAME=" nid=0x"
 REQUEST_THREAD_NAME="default task-"
@@ -22,43 +16,191 @@ SPECIFIED_USE_COUNT=0
 SPECIFIED_LINE_COUNT=20
 ALL_LINE_COUNT=10
 
+# Colors
+export RED='\033[0;31m'
+export BLUE='\033[0;34m'
+export GREEN='\033[0;32m'
+export YELLOW='\033[1;33m'
+export NC='\033[0m'
+
+VALID_UPDATE_MODES=(force ask never)
+
+YATDA_SH="$(basename "$(test -L "$0" && readlink "$0" || echo "$0")")"
+
+usage() {
+    if [ ! "x$1" = "x" ]; then
+        echo
+        echo -e "$1"
+        echo
+    fi
+    echo "Usage:"
+    echo " sh ./$YATDA_SH <options> <THREAD_DUMP_FILE>"
+    echo
+    echo "Yatda is just Yet Another Thread Dump Analyzer.  It focuses on "
+    echo "providing quick JBoss EAP 7+ specific statistics and known concerns."
+    echo
+    echo "Options:"
+    echo " -r, --requestThread             specify a name for request threads instead of 'default task'"
+    echo " -t, --specifiedThread           specify a thread name to focus on"
+    echo " -s, --specifiedTrace            specify a particular generic line indicating thread usage"
+    echo " -n, --specifiedLineCount        number of stack lines to focus on from request or specified threads"
+    echo " -a, --allLineCount              number of stack lines to focus on from all threads"
+    echo " -u, --updateMode                the update mode to use, one of [${VALID_UPDATE_MODES[*]}], default: force"
+    echo " -h, --help                      show this help"
+}
+
+# is_valid_option <argument> <array> <option>
+is_valid_option() {
+    ARGUMENT=$1
+    ARRAY=$2
+    OPTION=$3
+
+    if [[ ! " ${ARRAY[*]} " =~ " ${ARGUMENT} " ]]; then
+        echo "${YATDA_SH}: invalid argument '$ARGUMENT' for option '$OPTION', must be one of [${ARRAY[*]}]"
+        return 22 # -> Invalid Argument
+    else
+        return 0  # -> Success
+    fi
+}
+
+# source a global $HOME/.yatda/config if available
+if [ -d $HOME/.yatda ] && [ -f $HOME/.yatda/config ]; then
+    source $HOME/.yatda/config
+fi
+
+# set required variables with default values, if not set in $HOME/.yatda/config
+[ -z $UPDATE_MODE ] && UPDATE_MODE="force"
+[ -z $MD5 ] && MD5="https://raw.githubusercontent.com/aogburn/yatda/master/md5"
+[ -z $REMOTE_YATDA_SH ] && REMOTE_YATDA_SH="https://raw.githubusercontent.com/aogburn/yatda/master/yatda.sh"
+
+# parse the cli options
+OPTS=$(getopt -o 'r:,t:,s:,n:,a:,h,u:' --long 'requestThread,specifiedThread,specifiedTrace,specifiedLineCount,allLineCount,help,updateMode:' -n "${YATDA_SH}" -- "$@")
+
+# if getopt has a returned an error, exit with the return code of getopt
+res=$?; [ $res -gt 0 ] && exit $res
+
+eval set -- "$OPTS"
+unset OPTS
 
 # flags
-while getopts r:t:s:n:a:f: flag
-do
-    case "${flag}" in
-        r) REQUEST_THREAD_NAME=${OPTARG};;
-        t) SPECIFIED_THREAD_NAME=${OPTARG};;
-        s) SPECIFIED_TRACE=${OPTARG};;
-        n) SPECIFIED_LINE_COUNT=${OPTARG};;
-        a) ALL_LINE_COUNT=${OPTARG};;
-        f) FILE_NAME=${OPTARG};;
+while true; do
+    case "$1" in
+        '-r'|'--requestThread')
+            REQUEST_THREAD_NAME=$2
+            shift 2
+            ;;
+        '-t'|'--specifiedThread')
+            SPECIFIED_THREAD_NAME=$2
+            shift 2
+            ;;
+        '-s'|'--specifiedTrace')
+            SPECIFIED_TRACE=$2
+            shift 2
+            ;;
+        '-n'|'--specifiedLineCount')
+            SPECIFIED_LINE_COUNT=$2
+            shift 2
+            ;;
+        '-a'|'--allLineCount')
+            ALL_LINE_COUNT=$2
+            shift 2
+            ;;
+        '-h'|'--help')
+            usage; exit 0; shift
+            ;;
+        '-u'|'--updateMode')
+            is_valid_option "$2" "${VALID_UPDATE_MODES[*]}" "-u, --update"
+            result=$?
+            if [ $result -gt 0 ]; then
+                exit $result
+            fi
+            UPDATE_MODE=$2
+            shift 2
+            ;;
+        '--') shift; break;;
+        * )
+            echo "Invalid Option: $1"
+            echo ""
+            usage; exit; shift
+            ;;
     esac
 done
 
-if [ "x$FILE_NAME" = "x" ]; then
-    echo "Please specify file name with -f flag"
-    exit
+# check if filename is given
+if [ $# -eq 0 ]; then
+    echo "Please specify file name"
+    exit 22
 fi
 
-# Check for a new yatda.sh.  Uncomment next line if you want to avoid this check
-# CHECK_UPDATE="false"
-if [ "x$CHECK_UPDATE" = "x" ]; then
-    echo "Checking update. Uncomment CHECK_UPDATE in script if you wish to skip."
-    DIR=`dirname "$(readlink -f "$0")"`
-    SUM=`md5sum $DIR/yatda.sh | awk '{ print $1 }'`
-    NEWSUM=`curl https://raw.githubusercontent.com/aogburn/yatda/master/md5`
-    echo $DIR
-    echo $SUM
-    echo $NEWSUM
+# after parsing the options, '$1' is the file name
+FILE_NAME=$1
+
+
+#while getopts r:t:s:n:a:f: flag
+#do
+#    case "${flag}" in
+#       r) REQUEST_THREAD_NAME=${OPTARG};;
+#        t) SPECIFIED_THREAD_NAME=${OPTARG};;
+#        s) SPECIFIED_TRACE=${OPTARG};;
+#        n) SPECIFIED_LINE_COUNT=${OPTARG};;
+#        a) ALL_LINE_COUNT=${OPTARG};;
+#        f) FILE_NAME=${OPTARG};;
+#    esac
+#done
+
+#if [ "x$FILE_NAME" = "x" ]; then
+#    echo "Please specify file name"
+#    exit
+#fi
+
+
+# Check for a new yatda.sh if UPDATE_MODE is not 'never'
+DIR=`dirname "$(readlink -f "$0")"`
+if [ "$UPDATE_MODE" != "never" ]; then
+    echo "Checking script update. Use option '-u never' to skip the update check"
+
+    SUM=`md5sum $DIR/$YATDA_SH | awk '{ print $1 }'`
+    NEWSUM=$(curl -s $MD5)
+
     if [ "x$NEWSUM" != "x" ]; then
         if [ $SUM != $NEWSUM ]; then
-            echo "Version difference detected.  Downloading new version. Please re-run yatda."
-            wget -q https://raw.githubusercontent.com/aogburn/yatda/master/yatda.sh -O $DIR/yatda.sh
-            exit
+
+            echo
+            echo "$YATDA_SH - $SUM - local"
+            echo "$YATDA_SH - $NEWSUM - remote"
+
+            if [ "$UPDATE_MODE" = "ask" ]; then
+                while true; do
+                    echo
+                    read -p "A new version of $YATDA_SH is available, do you want to update?" yn
+                    case $yn in
+                        [Yy]* ) UPDATE="true"; break;;
+                        [Nn]* ) UPDATE="false"; break;;
+                        * ) echo "Choose yes or no.";;
+                    esac
+                done
+            else
+                UPDATE="true"
+            fi
+
+            if [ "$UPDATE" = "true" ]; then
+                echo "Downloading new version. Please re-run $YATDA_SH."
+                wget -q $REMOTE_YATDA_SH -O $DIR/$YATDA_SH
+                exit
+            fi
         fi
     fi
-    echo "Check complete."
+
+    echo
+    echo "Checks complete."
+fi
+
+if [ "x$FILE_NAME" = "x" ]; then
+    usage "${RED}No <THREAD_DUMP_FILE> provided.${NC}"
+    exit
+elif [ ! -f "$FILE_NAME" ]; then
+    usage "${YELLOW}<THREAD_DUMP_FILE> '$FILE_NAME' does not exist.${NC}"
+    exit
 fi
 
 
@@ -77,46 +219,57 @@ fi
 #fi
 
 
+echo -e "${RED}### Summarizing $FILE_NAME - see $FILE_NAME.yatda for more info ###${NC}"
+echo "### Summary of $FILE_NAME ###" > $FILE_NAME.yatda
+
 # Here we'll whip up some thread usage stats
 
 DUMP_COUNT=`grep "$DUMP_NAME" $FILE_NAME | wc -l`
-echo "Number of thread dumps: " $DUMP_COUNT > $FILE_NAME.yatda
+echo -en "${GREEN}"
+echo "Number of thread dumps: " $DUMP_COUNT | tee -a $FILE_NAME.yatda
 
 THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | wc -l`
-echo "Total number of threads: " $THREAD_COUNT >> $FILE_NAME.yatda
+echo -en "${YELLOW}"
+echo "Total number of threads: " $THREAD_COUNT | tee -a $FILE_NAME.yatda
 
 REQUEST_THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | egrep "$REQUEST_THREAD_NAME" | wc -l`
-echo "Total number of request threads: " $REQUEST_THREAD_COUNT >> $FILE_NAME.yatda
+echo -en "${GREEN}"
+echo "Total number of request threads: " $REQUEST_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     REQUEST_COUNT=`grep "$REQUEST_TRACE" $FILE_NAME | wc -l`
-    echo "Total number of in process requests: " $REQUEST_COUNT >> $FILE_NAME.yatda
+    echo -en "${YELLOW}"
+    echo "Total number of in process requests: " $REQUEST_COUNT | tee -a $FILE_NAME.yatda
 
     REQUEST_PERCENT=`printf %.2f "$((10**4 * $REQUEST_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
-    echo "Percent of present request threads in use for requests: " $REQUEST_PERCENT >> $FILE_NAME.yatda
+    echo -en "${GREEN}"
+    echo "Percent of present request threads in use for requests: " $REQUEST_PERCENT | tee -a $FILE_NAME.yatda
 
     if [ $DUMP_COUNT -gt 1 ]; then
-        echo "Average number of in process requests per thread dump: " `expr $REQUEST_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
-        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
-        echo "Average number of threads per thread dump: " `expr $THREAD_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+        echo -en "${YELLOW}"
+        echo "Average number of in process requests per thread dump: " `expr $REQUEST_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo -en "${GREEN}"
+        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo -en "${YELLOW}"
+        echo "Average number of threads per thread dump: " `expr $THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
     fi
 fi
 
 if [ "x$SPECIFIED_THREAD_NAME" != "x" ]; then
-    echo >> $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
     SPECIFIED_THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | egrep "$SPECIFIED_THREAD_NAME" | wc -l`
-    echo "Total number of $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_THREAD_COUNT >> $FILE_NAME.yatda
+    echo "Total number of $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
     if [[ "x$SPECIFIED_TRACE" != x && $SPECIFIED_THREAD_COUNT -gt 0 ]]; then
         SPECIFIED_USE_COUNT=`grep "$SPECIFIED_TRACE" $FILE_NAME | wc -l`
-        echo "Total number of in process $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_USE_COUNT >> $FILE_NAME.yatda
+        echo "Total number of in process $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_USE_COUNT | tee -a $FILE_NAME.yatda
 
         SPECIFIED_PERCENT=`printf %.2f "$((10**4 * $SPECIFIED_USE_COUNT / $SPECIFIED_THREAD_COUNT ))e-2" `
-        echo "Percent of present $SPECIFIED_THREAD_NAME threads in use: " $SPECIFIED_PERCENT >> $FILE_NAME.yatda
+        echo "Percent of present $SPECIFIED_THREAD_NAME threads in use: " $SPECIFIED_PERCENT | tee -a $FILE_NAME.yatda
 
         if [ $DUMP_COUNT -gt 1 ]; then
-            echo "Average number of in process $SPECIFIED_THREAD_NAME threads per thread dump: " `expr $SPECIFIED_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
-            echo "Average number of $SPECIFIED_THREAD_COUNT threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
+            echo "Average number of in process $SPECIFIED_THREAD_NAME threads per thread dump: " `expr $SPECIFIED_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+            echo "Average number of $SPECIFIED_THREAD_COUNT threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
         fi
     fi
 fi
@@ -124,85 +277,101 @@ fi
 
 
 # Here we'll try to point out any specific known issues
-echo >> $FILE_NAME.yatda
-echo "## Specific findings ##" >> $FILE_NAME.yatda
+echo | tee -a $FILE_NAME.yatda
+echo -en "${RED}"
+echo "## Specific findings ##" | tee -a $FILE_NAME.yatda
+echo -en "${NC}"
 i=1
 
 # request thread default and core count
 if [[ $REQUEST_THREAD_COUNT -gt 0 && `expr $REQUEST_THREAD_COUNT % 16` == 0 ]]; then
 NUMBER_CORES=`expr $REQUEST_THREAD_COUNT / 16`
 NUMBER_CORES=`expr $NUMBER_CORES / $DUMP_COUNT`
-    echo >> $FILE_NAME.yatda
-    echo $((i++)) ": The number of present request threads is a multple of 16 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores." >> $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
+    echo $i": The number of present request threads is a multple of 16 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores." | tee -a $FILE_NAME.yatda
+    i=$((i+1))
 fi
 
 
 # request thread exhaustion
 if [ $REQUEST_COUNT -gt 0 ] && [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
-#if [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
-    echo >> $FILE_NAME.yatda
-    echo $((i++)) ": The number of processing requests is equal to the number of present request threads.  This may indicate thread pool exhaustion so the task-max-threads may need to be increased (https://access.redhat.com/solutions/2455451)." >> $FILE_NAME.yatda
+
+    echo | tee -a $FILE_NAME.yatda
+    echo $i": The number of processing requests is equal to the number of present request threads.  This may indicate thread pool exhaustion so the task-max-threads may need to be increased (https://access.redhat.com/solutions/2455451)." | tee -a $FILE_NAME.yatda
+    i=$((i+1))
 fi
 
 
 # check EJB strict max pool exhaustion
 COUNT=`grep "at org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get" $FILE_NAME | wc -l`
 if [ $COUNT -gt 0 ]; then
-    echo >> $FILE_NAME.yatda
-    echo $((i++)) ": The amount of threads waiting for an EJB instance in org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get is $COUNT.  This indicates an EJB instance pool needs to be increased for the load (https://access.redhat.com/solutions/255033).  Check other threads actively processing in org.jboss.as.ejb3.component.pool.PooledInstanceInterceptor.processInvocation to see if EJB instances are used up in any specific calls." >> $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
+    echo $i": The amount of threads waiting for an EJB instance in org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get is $COUNT.  This indicates an EJB instance pool needs to be increased for the load (https://access.redhat.com/solutions/255033).  Check other threads actively processing in org.jboss.as.ejb3.component.pool.PooledInstanceInterceptor.processInvocation to see if EJB instances are used up in any specific calls." | tee -a $FILE_NAME.yatda
+    i=$((i+1))
 fi
 
 
 # check datasource exhaustion
 COUNT=`grep "at org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire" $FILE_NAME | wc -l`
 if [ $COUNT -gt 0 ]; then
-    echo >> $FILE_NAME.yatda
-    echo $((i++)) ": The amount of threads waiting for a datasource connection in org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire is $COUNT.  This indicates a datasource pool needs to be increased for the load or connections are being leaked or used too long (https://access.redhat.com/solutions/17782)." >> $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
+    echo $i": The amount of threads waiting for a datasource connection in org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire is $COUNT.  This indicates a datasource pool needs to be increased for the load or connections are being leaked or used too long (https://access.redhat.com/solutions/17782)." | tee -a $FILE_NAME.yatda
+    i=$((i+1))
 fi
 
 
 # check log contention
 COUNT=`grep "at org.jboss.logmanager.handlers.WriterHandler.doPublish" $FILE_NAME | wc -l`
 if [ $COUNT -gt 0 ]; then
-    echo >> $FILE_NAME.yatda
-    echo $((i++)) ": The amount of threads in org.jboss.logmanager.handlers.WriterHandler.doPublish is $COUNT.  High amounts of threads here may indicate logging that is too verbose and/or log writes that are too slow.  Consider decreasing log verbosity or configure an async log handler (https://access.redhat.com/solutions/444033) to limit response time impacts from log writes." >> $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
+    echo $i": The amount of threads in org.jboss.logmanager.handlers.WriterHandler.doPublish is $COUNT.  High amounts of threads here may indicate logging that is too verbose and/or log writes that are too slow.  Consider decreasing log verbosity or configure an async log handler (https://access.redhat.com/solutions/444033) to limit response time impacts from log writes." | tee -a $FILE_NAME.yatda
+    i=$((i+1))
 fi
 
 
 # check java.util.Arrays.copyOf calls
 COUNT=`grep "at java.util.Arrays.copyOf" $FILE_NAME | wc -l`
 if [ $COUNT -gt 0 ]; then
-    echo >> $FILE_NAME.yatda
-    echo $((i++)) ": The amount of threads in java.util.Arrays.copyOf is $COUNT.  Notable amounts of threads here or a significant time spent here in any thread may indicate a lot of time blocked in safe point pausing for GC because of little free heap space or the Array copies and other activity generating excessive amounts of temporary heap garbage.  GC logs should be reviewed to confirm or rule out GC performance concerns." >> $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
+    echo $i": The amount of threads in java.util.Arrays.copyOf is $COUNT.  Notable amounts of threads here or a significant time spent here in any thread may indicate a lot of time blocked in safe point pausing for GC because of little free heap space or the Array copies and other activity generating excessive amounts of temporary heap garbage.  GC logs should be reviewed to confirm or rule out GC performance concerns." | tee -a $FILE_NAME.yatda
+    i=$((i+1))
 fi
 
-echo >> $FILE_NAME.yatda
+echo | tee -a $FILE_NAME.yatda
 # end Findings
 
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     # This returns counts of the top line from all request thread stacks
-    echo "## Top lines of request threads ##" >> $FILE_NAME.yatda
-    egrep "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
-    echo >> $FILE_NAME.yatda
+    echo -en "${RED}"
+    echo "## Top lines of request threads ##" | tee -a $FILE_NAME.yatda
+    echo -en "${NC}"
+    egrep "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
-    echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" >> $FILE_NAME.yatda
-    egrep "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
-    echo >> $FILE_NAME.yatda
+    echo -en "${RED}"
+    echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" | tee -a $FILE_NAME.yatda
+    echo -en "${NC}"
+    egrep "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
 fi
 
 
 if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
     # This returns counts of the top line from all request thread stacks
-    echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" >> $FILE_NAME.yatda
-    egrep "\"$SPECIFIED_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
-    echo >> $FILE_NAME.yatda
+    echo -en "${RED}"
+    echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
+    echo -en "${NC}"
+    egrep "\"$SPECIFIED_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
-    echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" >> $FILE_NAME.yatda
-    egrep "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
-    echo >> $FILE_NAME.yatda
+    echo -en "${RED}"
+    echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
+    echo -en "${NC}"
+    egrep "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
 fi
 
 
