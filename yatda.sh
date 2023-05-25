@@ -15,6 +15,7 @@ SPECIFIED_THREAD_COUNT=0
 SPECIFIED_USE_COUNT=0
 SPECIFIED_LINE_COUNT=20
 ALL_LINE_COUNT=10
+JAVA_11="false"
 
 # Colors
 export RED='\033[0;31m'
@@ -212,13 +213,6 @@ if [ `grep 'org.apache.tomcat.util' $FILE_NAME | wc -l` -gt 0 ]; then
 fi
 
 
-# Handle java 11 dump differently
-# Not needed currently
-#if [ `grep "$DUMP_NAME" $FILE_NAME | grep " 11\." | wc -l` -gt 0 ]; then
-#    echo "Treating as dump from java 11"
-#fi
-
-
 echo -e "${RED}### Summarizing $FILE_NAME - see $FILE_NAME.yatda for more info ###${NC}"
 echo "### Summary of $FILE_NAME ###" > $FILE_NAME.yatda
 
@@ -228,11 +222,12 @@ DUMP_COUNT=`grep "$DUMP_NAME" $FILE_NAME | wc -l`
 echo -en "${GREEN}"
 echo "Number of thread dumps: " $DUMP_COUNT | tee -a $FILE_NAME.yatda
 
-THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | wc -l`
+grep "$ALL_THREAD_NAME" $FILE_NAME > $FILE_NAME.yatda-tmp.allthreads
+THREAD_COUNT=`cat $FILE_NAME.yatda-tmp.allthreads | wc -l`
 echo -en "${YELLOW}"
 echo "Total number of threads: " $THREAD_COUNT | tee -a $FILE_NAME.yatda
 
-REQUEST_THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | egrep "$REQUEST_THREAD_NAME" | wc -l`
+REQUEST_THREAD_COUNT=`cat $FILE_NAME.yatda-tmp.allthreads | grep -E "$REQUEST_THREAD_NAME" | wc -l`
 echo -en "${GREEN}"
 echo "Total number of request threads: " $REQUEST_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
@@ -257,7 +252,7 @@ fi
 
 if [ "x$SPECIFIED_THREAD_NAME" != "x" ]; then
     echo | tee -a $FILE_NAME.yatda
-    SPECIFIED_THREAD_COUNT=`grep "$ALL_THREAD_NAME" $FILE_NAME | egrep "$SPECIFIED_THREAD_NAME" | wc -l`
+    SPECIFIED_THREAD_COUNT=`cat $FILE_NAME.yatda-tmp.allthreads | grep -E "$SPECIFIED_THREAD_NAME" | wc -l`
     echo "Total number of $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
     if [[ "x$SPECIFIED_TRACE" != x && $SPECIFIED_THREAD_COUNT -gt 0 ]]; then
@@ -346,14 +341,14 @@ if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Top lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    egrep "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    egrep "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
@@ -363,14 +358,14 @@ if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    egrep "\"$SPECIFIED_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$SPECIFIED_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    egrep "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
@@ -422,3 +417,72 @@ if [ $COUNT -gt 0 ]; then
     echo "## Most common from first 10 lines of MSC threads ##" >> $FILE_NAME.yatda
     grep "MSC service thread " -A 11 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
 fi
+
+
+# Handle java 11+ dump differently to process addtional CPU
+if [ `grep "$DUMP_NAME" $FILE_NAME | grep -E "VM \(1[1-9]\." | wc -l` -gt 0 ]; then
+    JAVA_11="true"
+fi
+
+# Calculate CPU thread deltas
+#GC thread names
+#ParGC Thread#
+#VM Thread
+#"GC Thread#n" os_prio=0 cpu=204.85ms elapsed=7.43s tid=0x000055758eef2800 nid=0x3feb runnable
+#"G1 Main Marker" os_prio=0 cpu=6.53ms elapsed=7.43s tid=0x000055758eefb000 nid=0x3fec runnable
+#"G1 Conc#n" os_prio=0 cpu=518.97ms elapsed=7.43s tid=0x000055758eefd000 nid=0x3fed runnable
+#"G1 Refine#n" os_prio=0 cpu=5.14ms elapsed=7.43s tid=0x000055758ef8b000 nid=0x3fee runnable
+#"G1 Young RemSet Sampling"
+
+if [ "$JAVA_11" == "true" ]; then
+    echo | tee -a $FILE_NAME.yatda
+    echo -en "${RED}"
+    echo "## Java 11+ GC CPU summary - check $FILE_NAME.yatda for more details if a high max consumer ##"
+    echo -en "${NC}"
+    echo "## Java 11+ GC CPU summary ##" >> $FILE_NAME.yatda
+
+    GC_THREAD_NAMES="VM Thread|GC Thread|G1 "
+    MAX_GC_PERCENTAGE=0
+    MAX_GC_DELTA_PERCENTAGE=0
+
+    grep -B 1 "$DUMP_NAME" $FILE_NAME | grep -E "^20[0-9][0-9]\-" > $FILE_NAME.yatda-tmp.timestamps
+    grep -E "\"$GC_THREAD_NAMES" $FILE_NAME.yatda-tmp.allthreads | sed -E 's/^"(.*)" os_prio=.*/\1/g' | sort | uniq > $FILE_NAME.yatda-tmp.gc-threads
+    i=1
+    while read -r line ; do
+        echo -en "${YELLOW}"
+        echo "   $i. $line CPU summary" >> $FILE_NAME.yatda
+        echo -en "${NC}"
+        NEW_CPU=""
+        NEW_ELAPSED=""
+        while read -r line2; do
+            OLD_CPU=$NEW_CPU
+            OLD_ELAPSED=$NEW_ELAPSED
+            NEW_CPU=`echo $line2 | sed -E 's/.*cpu=(.*)\..*ms elapsed=.*/\1/g'`
+            #converted elapsed from s to ms
+            NEW_ELAPSED="`echo $line2 | sed -E 's/.*ms elapsed=(.*)\.(.*)s tid=.*/\1\2/g'`0"
+
+            sed "${i}q;d" $FILE_NAME.yatda-tmp.timestamps >> $FILE_NAME.yatda
+            echo $line2 >> $FILE_NAME.yatda
+            GC_PERCENTAGE=`printf %.0f "$((10**4 * $NEW_CPU / $NEW_ELAPSED ))e-2" `
+            if [ $GC_PERCENTAGE -gt $MAX_GC_PERCENTAGE ]; then
+                MAX_GC_PERCENTAGE=$GC_PERCENTAGE
+            fi
+            echo "TOTAL CPU: $NEW_CPU ms ELAPSED: $NEW_ELAPSED ms PERCENTAGE: $GC_PERCENTAGE" >> $FILE_NAME.yatda
+            if [ "x$OLD_CPU" != "x" ]; then
+                GC_DELTA_PERCENTAGE=`printf %.0f "$((10**4 * ($NEW_CPU - $OLD_CPU) / ($NEW_ELAPSED - $OLD_ELAPSED)))e-2" `
+                if [ $GC_DELTA_PERCENTAGE -gt $MAX_GC_DELTA_PERCENTAGE ]; then
+                    MAX_GC_DELTA_PERCENTAGE=$GC_DELTA_PERCENTAGE
+                fi
+                echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` PERCENTAGE: $GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda
+            fi
+            echo >> $FILE_NAME.yatda
+        done < <(grep "$line" $FILE_NAME.yatda-tmp.allthreads)
+        i=$((i+1))
+    done < <(cat $FILE_NAME.yatda-tmp.gc-threads)
+
+    echo "Max total CPU percent of a GC thread: $MAX_GC_PERCENTAGE" | tee -a $FILE_NAME.yatda
+    echo "Max CPU percent between dumps of a GC thread: $MAX_GC_DELTA_PERCENTAGE" | tee -a $FILE_NAME.yatda
+fi
+
+#clean up tmp files
+rm -f $FILE_NAME.yatda-tmp.*
