@@ -439,7 +439,7 @@ if [ "$JAVA_11" == "true" ]; then
 
     echo
     echo -en "${RED}"
-    echo "## Java 11+ GC CPU summary of $FILE_NAME - check $FILE_NAME.yatda-cpu for more details if a high max consumer ##"
+    echo "## Java 11+ GC CPU summary of $FILE_NAME - check $FILE_NAME.yatda-gc-cpu for more details if a high max consumer ##"
     echo -en "${NC}"
     echo "## Java 11+ GC CPU summary of $FILE_NAME ##" > $FILE_NAME.yatda-cpu
 
@@ -485,7 +485,7 @@ if [ "$JAVA_11" == "true" ]; then
                 echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` PERCENTAGE: $GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda-cpu
             fi
             echo >> $FILE_NAME.yatda-cpu
-        done < <(grep "$line" $FILE_NAME.yatda-tmp.allthreads)
+        done < <(grep "\"$line\"" $FILE_NAME.yatda-tmp.allthreads)
         i=$((i+1))
     done < <(cat $FILE_NAME.yatda-tmp.gc-threads)
 
