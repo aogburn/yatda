@@ -525,7 +525,7 @@ if [ "$JAVA_11" == "true" ]; then
     echo "## high consumers above the $CPU_THRESHOLD% CPU threshold (-c flag to adjust) ## ##" >> $FILE_NAME.yatda-cpu
     echo >> $FILE_NAME.yatda-cpu
 
-    grep -v -E "\"$GC_THREAD_NAMES" $FILE_NAME.yatda-tmp.allthreads | sed -E 's/^".* tid=(.*) nid=.*/\1/g' | sort | uniq > $FILE_NAME.yatda-tmp.non-gc-threads
+    grep -v -E "\"$GC_THREAD_NAMES" $FILE_NAME.yatda-tmp.allthreads | sed -E 's/^".* nid=0x([[:alnum:]]*) .*/0x\1/g' | sort | uniq > $FILE_NAME.yatda-tmp.non-gc-threads
     while read -r line ; do
         NEW_CPU=""
         NEW_ELAPSED=""
