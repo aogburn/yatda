@@ -16,6 +16,7 @@ SPECIFIED_USE_COUNT=0
 SPECIFIED_LINE_COUNT=20
 ALL_LINE_COUNT=10
 CPU_THRESHOLD=40
+GC_CPU_THRESHOLD=1
 JAVA_11="false"
 
 # Colors
@@ -48,6 +49,7 @@ usage() {
     echo " -n, --specifiedLineCount        number of stack lines to focus on from request or specified threads"
     echo " -a, --allLineCount              number of stack lines to focus on from all threads"
     echo " -c, --cpuThreshold              threshold of %CPU use for non-GC threads from java 11+ dumps"
+    echo " -g, --gcCpuThreshold            threshold of %CPU use for GC threads from java 11+ dumps"
     echo " -u, --updateMode                the update mode to use, one of [${VALID_UPDATE_MODES[*]}], default: force"
     echo " -h, --help                      show this help"
 }
@@ -77,7 +79,7 @@ fi
 [ -z $REMOTE_YATDA_SH ] && REMOTE_YATDA_SH="https://raw.githubusercontent.com/aogburn/yatda/master/yatda.sh"
 
 # parse the cli options
-OPTS=$(getopt -o 'r:,t:,s:,n:,a:,c:,h,u:' --long 'requestThread,specifiedThread,specifiedTrace,specifiedLineCount,allLineCount,cpuThreshold,help,updateMode:' -n "${YATDA_SH}" -- "$@")
+OPTS=$(getopt -o 'r:,t:,s:,n:,a:,c:,g:,h,u:' --long 'requestThread,specifiedThread,specifiedTrace,specifiedLineCount,allLineCount,cpuThreshold,gcCpuThreshold,help,updateMode:' -n "${YATDA_SH}" -- "$@")
 
 # if getopt has a returned an error, exit with the return code of getopt
 res=$?; [ $res -gt 0 ] && exit $res
@@ -110,6 +112,10 @@ while true; do
             ;;
         '-c'|'--cpuThreshold')
             CPU_THRESHOLD=$2
+            shift 2
+            ;;
+        '-g'|'--gcCpuThreshold')
+            GC_CPU_THRESHOLD=$2
             shift 2
             ;;
         '-h'|'--help')
@@ -444,9 +450,10 @@ if [ "$JAVA_11" == "true" ]; then
 
     echo
     echo -en "${RED}"
-    echo "## Java 11+ GC CPU summary of $FILE_NAME - check $FILE_NAME.yatda-gc-cpu for more details if a high max consumer ##"
+    echo "## Java 11+ GC CPU summary of $FILE_NAME - check $FILE_NAME.yatda-gc-cpu for more details of any high GC consumers above the $GC_CPU_THRESHOLD% GC CPU threshold (-g flag to adjust) ##"
     echo -en "${NC}"
-    echo "## Java 11+ GC CPU summary of $FILE_NAME ##" > $FILE_NAME.yatda-cpu
+    echo "## Java 11+ GC CPU summary of $FILE_NAME ##" > $FILE_NAME.yatda-gc-cpu
+    echo "## high GC consumers above the $GC_CPU_THRESHOLD% GC CPU threshold (-g flag to adjust) ## ##" >> $FILE_NAME.yatda-gc-cpu
 
     GC_THREAD_NAMES="VM Thread|GC Thread|G1 "
     MAX_GC_PERCENTAGE=0
@@ -460,7 +467,7 @@ if [ "$JAVA_11" == "true" ]; then
     i=1
     while read -r line ; do
         echo -en "${YELLOW}"
-        echo "   $i. $line CPU summary" >> $FILE_NAME.yatda-cpu
+        echo "   $i. $line CPU summary" >> $FILE_NAME.yatda-gc-cpu
         echo -en "${NC}"
         NEW_CPU=""
         NEW_ELAPSED=""
@@ -473,40 +480,48 @@ if [ "$JAVA_11" == "true" ]; then
             # trim any leading 0
             NEW_ELAPSED="`echo $NEW_ELAPSED | sed -E 's/^0(.*)/\1/g'`"
 
-            sed "${i}q;d" $FILE_NAME.yatda-tmp.timestamps >> $FILE_NAME.yatda-cpu
-            echo $line2 >> $FILE_NAME.yatda-cpu
+
             GC_PERCENTAGE=`printf %.0f "$((10**4 * $NEW_CPU / $NEW_ELAPSED ))e-2" `
             if [ $GC_PERCENTAGE -gt $MAX_GC_PERCENTAGE ]; then
                 MAX_GC_PERCENTAGE=$GC_PERCENTAGE
                 MAX_GC_LINE=$line2
             fi
-            echo "TOTAL CPU: $NEW_CPU ms ELAPSED: $NEW_ELAPSED ms PERCENTAGE: $GC_PERCENTAGE" >> $FILE_NAME.yatda-cpu
+
             if [ "x$OLD_CPU" != "x" ]; then
                 GC_DELTA_PERCENTAGE=`printf %.0f "$((10**4 * ($NEW_CPU - $OLD_CPU) / ($NEW_ELAPSED - $OLD_ELAPSED)))e-2" `
                 if [ $GC_DELTA_PERCENTAGE -gt $MAX_GC_DELTA_PERCENTAGE ]; then
                     MAX_GC_DELTA_PERCENTAGE=$GC_DELTA_PERCENTAGE
                     MAX_GC_DELTA_LINE=$line2
                 fi
-                echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` PERCENTAGE: $GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda-cpu
+
+                # report GC consumer above our $GC_CPU_THRESHOLD
+                if [ $GC_DELTA_PERCENTAGE -gt $GC_CPU_THRESHOLD ]; then
+                    echo "------------------------------------------------------------------------------" >> $FILE_NAME.yatda-gc-cpu
+                    sed "${i}q;d" $FILE_NAME.yatda-tmp.timestamps >> $FILE_NAME.yatda-gc-cpu
+                    echo $line2 >> $FILE_NAME.yatda-gc-cpu
+                    echo "TOTAL CPU: $NEW_CPU ms ELAPSED: $NEW_ELAPSED ms PERCENTAGE: $GC_PERCENTAGE" >> $FILE_NAME.yatda-gc-cpu
+                    echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` ms PERCENTAGE: $GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda-gc-cpu
+                    echo "------------------------------------------------------------------------------" >> $FILE_NAME.yatda-gc-cpu
+                    echo >> $FILE_NAME.yatda-gc-cpu
+                fi
             fi
-            echo >> $FILE_NAME.yatda-cpu
         done < <(grep "\"$line\"" $FILE_NAME.yatda-tmp.allthreads)
         i=$((i+1))
     done < <(cat $FILE_NAME.yatda-tmp.gc-threads)
 
-    echo "Max total CPU percent of a GC thread: $MAX_GC_PERCENTAGE" | tee -a $FILE_NAME.yatda-cpu
-    echo "    $MAX_GC_LINE" | tee -a $FILE_NAME.yatda-cpu
-    echo "Max CPU percent between dumps of a GC thread: $MAX_GC_DELTA_PERCENTAGE" | tee -a $FILE_NAME.yatda-cpu
-    echo "    $MAX_GC_DELTA_LINE" | tee -a $FILE_NAME.yatda-cpu
+    echo >> $FILE_NAME.yatda-gc-cpu
+    echo "Max total CPU percent of a GC thread: $MAX_GC_PERCENTAGE" | tee -a $FILE_NAME.yatda-gc-cpu
+    echo "    $MAX_GC_LINE" | tee -a $FILE_NAME.yatda-gc-cpu
+    echo "Max CPU percent between dumps of a GC thread: $MAX_GC_DELTA_PERCENTAGE" | tee -a $FILE_NAME.yatda-gc-cpu
+    echo "    $MAX_GC_DELTA_LINE" | tee -a $FILE_NAME.yatda-gc-cpu
 
 
     # Calculate non-GC thread CPU deltas
-    echo | tee -a $FILE_NAME.yatda-cpu
-    echo | tee -a $FILE_NAME.yatda-cpu
+    echo 
     echo -en "${RED}"
     echo "## Java 11+ non-GC CPU summary of $FILE_NAME - check $FILE_NAME.yatda-cpu for more details of any high consumers above the $CPU_THRESHOLD% CPU threshold (-c flag to adjust) ##"
     echo -en "${NC}"
-    echo "## Java 11+ non-GC thread CPU summary of $FILE_NAME ##" >> $FILE_NAME.yatda-cpu
+    echo "## Java 11+ non-GC thread CPU summary of $FILE_NAME ##" > $FILE_NAME.yatda-cpu
     echo "## high consumers above the $CPU_THRESHOLD% CPU threshold (-c flag to adjust) ## ##" >> $FILE_NAME.yatda-cpu
     echo >> $FILE_NAME.yatda-cpu
 
@@ -537,13 +552,12 @@ if [ "$JAVA_11" == "true" ]; then
 
                 # report non GC consumer above our $CPU_THRESHOLD
                 if [ $NON_GC_DELTA_PERCENTAGE -gt $CPU_THRESHOLD ]; then
-                    echo >> $FILE_NAME.yatda-cpu
                     echo "------------------------------------------------------------------------------" >> $FILE_NAME.yatda-cpu
-                    echo "TOTAL CPU: $NEW_CPU ms ELAPSED: $NEW_ELAPSED ms PERCENTAGE: $NON_GC_PERCENTAGE" >> $FILE_NAME.yatda-cpu
-                    echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` PERCENTAGE: $NON_GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda-cpu
                     THREAD_LINE="`echo $line2 | sed -E 's/.*cpu=(.*)\[.*/\1/g'`"
                     #get the prior time stamp
                     grep -E "($THREAD_LINE)|^20[0-9][0-9]\-" $FILE_NAME | grep -B 1 "$THREAD_LINE" >> $FILE_NAME.yatda-cpu
+                    echo "TOTAL CPU: $NEW_CPU ms ELAPSED: $NEW_ELAPSED ms PERCENTAGE: $NON_GC_PERCENTAGE" >> $FILE_NAME.yatda-cpu
+                    echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` ms PERCENTAGE: $NON_GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda-cpu
                     grep -A 10 -E "$THREAD_LINE" $FILE_NAME | grep -v "$THREAD_LINE" | sed -E '/^$.*/,+10d' >> $FILE_NAME.yatda-cpu
                     echo "------------------------------------------------------------------------------" >> $FILE_NAME.yatda-cpu
                     echo >> $FILE_NAME.yatda-cpu
@@ -552,10 +566,10 @@ if [ "$JAVA_11" == "true" ]; then
         done < <(grep "$line" $FILE_NAME.yatda-tmp.allthreads)
     done < <(cat $FILE_NAME.yatda-tmp.non-gc-threads)
 
-    echo >> $FILE_NAME.yatda
-    echo "Max total CPU percent of a non GC thread: $MAX_NON_GC_PERCENTAGE" | tee -a $FILE_NAME.yatda
+    echo >> $FILE_NAME.yatda-cpu
+    echo "Max total CPU percent of a non GC thread: $MAX_NON_GC_PERCENTAGE" | tee -a $FILE_NAME.yatda-cpu
     echo "    $MAX_NON_GC_LINE"
-    echo "Max CPU percent between dumps of a non GC thread: $MAX_NON_GC_DELTA_PERCENTAGE" | tee -a $FILE_NAME.yatda
+    echo "Max CPU percent between dumps of a non GC thread: $MAX_NON_GC_DELTA_PERCENTAGE" | tee -a $FILE_NAME.yatda-cpu
     echo "    $MAX_NON_GC_DELTA_LINE"
 fi
 
