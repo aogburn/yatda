@@ -47,6 +47,7 @@ usage() {
     echo " -s, --specifiedTrace            specify a particular generic line indicating thread usage"
     echo " -n, --specifiedLineCount        number of stack lines to focus on from request or specified threads"
     echo " -a, --allLineCount              number of stack lines to focus on from all threads"
+    echo " -c, --cpuThreshold              threshold of %CPU use for non-GC threads from java 11+ dumps"
     echo " -u, --updateMode                the update mode to use, one of [${VALID_UPDATE_MODES[*]}], default: force"
     echo " -h, --help                      show this help"
 }
@@ -76,7 +77,7 @@ fi
 [ -z $REMOTE_YATDA_SH ] && REMOTE_YATDA_SH="https://raw.githubusercontent.com/aogburn/yatda/master/yatda.sh"
 
 # parse the cli options
-OPTS=$(getopt -o 'r:,t:,s:,n:,a:,h,u:' --long 'requestThread,specifiedThread,specifiedTrace,specifiedLineCount,allLineCount,help,updateMode:' -n "${YATDA_SH}" -- "$@")
+OPTS=$(getopt -o 'r:,t:,s:,n:,a:,c:,h,u:' --long 'requestThread,specifiedThread,specifiedTrace,specifiedLineCount,allLineCount,cpuThreshold,help,updateMode:' -n "${YATDA_SH}" -- "$@")
 
 # if getopt has a returned an error, exit with the return code of getopt
 res=$?; [ $res -gt 0 ] && exit $res
@@ -105,6 +106,10 @@ while true; do
             ;;
         '-a'|'--allLineCount')
             ALL_LINE_COUNT=$2
+            shift 2
+            ;;
+        '-c'|'--cpuThreshold')
+            CPU_THRESHOLD=$2
             shift 2
             ;;
         '-h'|'--help')
