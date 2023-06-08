@@ -547,7 +547,7 @@ if [ "$JAVA_11" == "true" ]; then
 
             NON_GC_PERCENTAGE=`printf %.0f "$((10**4 * $NEW_CPU / $NEW_ELAPSED ))e-2" `
             if [ $NON_GC_PERCENTAGE -gt $MAX_GC_PERCENTAGE ]; then
-                MAX_GC_PERCENTAGE=$NON_GC_PERCENTAGE
+                MAX_NON_GC_PERCENTAGE=$NON_GC_PERCENTAGE
                 MAX_NON_GC_LINE=$line2
             fi
             if [ "x$OLD_CPU" != "x" ]; then
