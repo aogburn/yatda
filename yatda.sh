@@ -149,24 +149,6 @@ fi
 FILE_NAME=$1
 
 
-#while getopts r:t:s:n:a:f: flag
-#do
-#    case "${flag}" in
-#       r) REQUEST_THREAD_NAME=${OPTARG};;
-#        t) SPECIFIED_THREAD_NAME=${OPTARG};;
-#        s) SPECIFIED_TRACE=${OPTARG};;
-#        n) SPECIFIED_LINE_COUNT=${OPTARG};;
-#        a) ALL_LINE_COUNT=${OPTARG};;
-#        f) FILE_NAME=${OPTARG};;
-#    esac
-#done
-
-#if [ "x$FILE_NAME" = "x" ]; then
-#    echo "Please specify file name"
-#    exit
-#fi
-
-
 # Check for a new yatda.sh if UPDATE_MODE is not 'never'
 DIR=`dirname "$(readlink -f "$0")"`
 if [ "$UPDATE_MODE" != "never" ]; then
@@ -216,9 +198,12 @@ elif [ ! -f "$FILE_NAME" ]; then
     exit
 fi
 
+TRIM_FILE=$FILE_NAME.yatda-tmp.trim
+
+sed '/^Found .* Java-level deadlock/,/^Found [0-9] deadlock/d' $FILE_NAME > $TRIM_FILE
 
 # Use different thread details if it looks like a thread dump from JBossWeb/Tomcat
-if [ `grep 'org.apache.tomcat.util' $FILE_NAME | wc -l` -gt 0 ]; then
+if [ `grep 'org.apache.tomcat.util' $TRIM_FILE | wc -l` -gt 0 ]; then
     echo "Treating as dump from JBossWeb or Tomcat"
     REQUEST_THREAD_NAME="http-|ajp-"
     REQUEST_TRACE="org.apache.catalina.connector.CoyoteAdapter.service"
@@ -230,11 +215,11 @@ echo "### Summary of $FILE_NAME ###" > $FILE_NAME.yatda
 
 # Here we'll whip up some thread usage stats
 
-DUMP_COUNT=`grep "$DUMP_NAME" $FILE_NAME | wc -l`
+DUMP_COUNT=`grep "$DUMP_NAME" $TRIM_FILE | wc -l`
 echo -en "${GREEN}"
 echo "Number of thread dumps: " $DUMP_COUNT | tee -a $FILE_NAME.yatda
 
-grep "$ALL_THREAD_NAME" $FILE_NAME > $FILE_NAME.yatda-tmp.allthreads
+grep "$ALL_THREAD_NAME" $TRIM_FILE > $FILE_NAME.yatda-tmp.allthreads
 THREAD_COUNT=`cat $FILE_NAME.yatda-tmp.allthreads | wc -l`
 echo -en "${YELLOW}"
 echo "Total number of threads: " $THREAD_COUNT | tee -a $FILE_NAME.yatda
@@ -244,7 +229,7 @@ echo -en "${GREEN}"
 echo "Total number of request threads: " $REQUEST_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
-    REQUEST_COUNT=`grep "$REQUEST_TRACE" $FILE_NAME | wc -l`
+    REQUEST_COUNT=`grep "$REQUEST_TRACE" $TRIM_FILE | wc -l`
     echo -en "${YELLOW}"
     echo "Total number of in process requests: " $REQUEST_COUNT | tee -a $FILE_NAME.yatda
 
@@ -268,7 +253,7 @@ if [ "x$SPECIFIED_THREAD_NAME" != "x" ]; then
     echo "Total number of $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
     if [[ "x$SPECIFIED_TRACE" != x && $SPECIFIED_THREAD_COUNT -gt 0 ]]; then
-        SPECIFIED_USE_COUNT=`grep "$SPECIFIED_TRACE" $FILE_NAME | wc -l`
+        SPECIFIED_USE_COUNT=`grep "$SPECIFIED_TRACE" $TRIM_FILE | wc -l`
         echo "Total number of in process $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_USE_COUNT | tee -a $FILE_NAME.yatda
 
         SPECIFIED_PERCENT=`printf %.2f "$((10**4 * $SPECIFIED_USE_COUNT / $SPECIFIED_THREAD_COUNT ))e-2" `
@@ -310,7 +295,7 @@ fi
 
 
 # check EJB strict max pool exhaustion
-COUNT=`grep "at org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get" $FILE_NAME | wc -l`
+COUNT=`grep "at org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get" $TRIM_FILE | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo | tee -a $FILE_NAME.yatda
     echo $i": The amount of threads waiting for an EJB instance in org.jboss.as.ejb3.pool.strictmax.StrictMaxPool.get is $COUNT.  This indicates an EJB instance pool needs to be increased for the load (https://access.redhat.com/solutions/255033).  Check other threads actively processing in org.jboss.as.ejb3.component.pool.PooledInstanceInterceptor.processInvocation to see if EJB instances are used up in any specific calls." | tee -a $FILE_NAME.yatda
@@ -319,7 +304,7 @@ fi
 
 
 # check datasource exhaustion
-COUNT=`grep "at org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire" $FILE_NAME | wc -l`
+COUNT=`grep "at org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire" $TRIM_FILE | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo | tee -a $FILE_NAME.yatda
     echo $i": The amount of threads waiting for a datasource connection in org.jboss.jca.core.connectionmanager.pool.api.Semaphore.tryAcquire is $COUNT.  This indicates a datasource pool needs to be increased for the load or connections are being leaked or used too long (https://access.redhat.com/solutions/17782)." | tee -a $FILE_NAME.yatda
@@ -328,7 +313,7 @@ fi
 
 
 # check log contention
-COUNT=`grep "at org.jboss.logmanager.handlers.WriterHandler.doPublish" $FILE_NAME | wc -l`
+COUNT=`grep "at org.jboss.logmanager.handlers.WriterHandler.doPublish" $TRIM_FILE | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo | tee -a $FILE_NAME.yatda
     echo $i": The amount of threads in org.jboss.logmanager.handlers.WriterHandler.doPublish is $COUNT.  High amounts of threads here may indicate logging that is too verbose and/or log writes that are too slow.  Consider decreasing log verbosity or configure an async log handler (https://access.redhat.com/solutions/444033) to limit response time impacts from log writes." | tee -a $FILE_NAME.yatda
@@ -337,7 +322,7 @@ fi
 
 
 # check java.util.Arrays.copyOf calls
-COUNT=`grep "at java.util.Arrays.copyOf" $FILE_NAME | wc -l`
+COUNT=`grep "at java.util.Arrays.copyOf" $TRIM_FILE | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo | tee -a $FILE_NAME.yatda
     echo $i": The amount of threads in java.util.Arrays.copyOf is $COUNT.  Notable amounts of threads here or a significant time spent here in any thread may indicate a lot of time blocked in safe point pausing for GC because of little free heap space or the Array copies and other activity generating excessive amounts of temporary heap garbage.  GC logs should be reviewed to confirm or rule out GC performance concerns." | tee -a $FILE_NAME.yatda
@@ -353,14 +338,14 @@ if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Top lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$REQUEST_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$REQUEST_THREAD_NAME" -A 2 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
@@ -370,48 +355,48 @@ if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$SPECIFIED_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$SPECIFIED_THREAD_NAME" -A 2 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
 
 # This returns counts of the top line from all thread stacks
 echo "## Top lines of all threads ##" >> $FILE_NAME.yatda
-grep "$ALL_THREAD_NAME" -A 2 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+grep "$ALL_THREAD_NAME" -A 2 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
 echo >> $FILE_NAME.yatda
 
 # This returns counts of the unique 20 top lines from all request thread stacks
 echo "## Most common from first $ALL_LINE_COUNT lines of all threads ##" >> $FILE_NAME.yatda
-grep "$ALL_THREAD_NAME" -A `expr $ALL_LINE_COUNT + 1` $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+grep "$ALL_THREAD_NAME" -A `expr $ALL_LINE_COUNT + 1` $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
 
 
 # Focus on EAP boot threads
 echo  >> $FILE_NAME.yatda
 echo "## EAP BOOT THREAD INFO ##" >> $FILE_NAME.yatda
 echo  >> $FILE_NAME.yatda
-COUNT=`grep "ServerService Thread Pool " $FILE_NAME | wc -l`
+COUNT=`grep "ServerService Thread Pool " $TRIM_FILE | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo "Number of ServerService threads: " $COUNT >> $FILE_NAME.yatda
     if [ $DUMP_COUNT -gt 1 ]; then
         echo "Average number of ServerService threads per thread dump: " `expr $COUNT / $DUMP_COUNT` >> $FILE_NAME.yatda
     fi
     echo "## Most common from first 10 lines of ServerService threads ##" >> $FILE_NAME.yatda
-    grep "ServerService Thread Pool " -A 11 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+    grep "ServerService Thread Pool " -A 11 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
     echo  >> $FILE_NAME.yatda
 fi
 
-COUNT=`grep "MSC service thread " $FILE_NAME | wc -l`
+COUNT=`grep "MSC service thread " $TRIM_FILE | wc -l`
 if [ $COUNT -gt 0 ]; then
     echo "Number of MSC service threads: " $COUNT >> $FILE_NAME.yatda
 
-    TASK_COUNT=`grep "org.jboss.msc.service.ServiceControllerImpl\\$ControllerTask.run" $FILE_NAME | wc -l`
+    TASK_COUNT=`grep "org.jboss.msc.service.ServiceControllerImpl\\$ControllerTask.run" $TRIM_FILE | wc -l`
     echo "Total number of running ControllerTasks: " $TASK_COUNT >> $FILE_NAME.yatda
 
     MSC_PERCENT=`printf %.2f "$((10**4 * $TASK_COUNT / $COUNT ))e-2" `
@@ -427,12 +412,12 @@ if [ $COUNT -gt 0 ]; then
         echo "*The number of present MSC threads is a multple of 2 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores. If these are all in use during start up, the thread pool may need to be increased via -Dorg.jboss.server.bootstrap.maxThreads and -Djboss.msc.max.container.threads properties per https://access.redhat.com/solutions/508413." >> $FILE_NAME.yatda
     fi
     echo "## Most common from first 10 lines of MSC threads ##" >> $FILE_NAME.yatda
-    grep "MSC service thread " -A 11 $FILE_NAME | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+    grep "MSC service thread " -A 11 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
 fi
 
 
 # Handle java 11+ dump differently to process addtional CPU
-if [ `grep "$DUMP_NAME" $FILE_NAME | grep -E "VM \(1[1-9]\." | wc -l` -gt 0 ]; then
+if [ `grep "$DUMP_NAME" $TRIM_FILE | grep -E "VM \(1[1-9]\." | wc -l` -gt 0 ]; then
     JAVA_11="true"
 fi
 
@@ -462,7 +447,7 @@ if [ "$JAVA_11" == "true" ]; then
     MAX_NON_GC_PERCENTAGE=0
     MAX_NON_GC_DELTA_PERCENTAGE=0
 
-    grep -B 1 "$DUMP_NAME" $FILE_NAME | grep -E "^20[0-9][0-9]\-" > $FILE_NAME.yatda-tmp.timestamps
+    grep -B 1 "$DUMP_NAME" $TRIM_FILE | grep -E "^20[0-9][0-9]\-" > $FILE_NAME.yatda-tmp.timestamps
     grep -E "\"$GC_THREAD_NAMES" $FILE_NAME.yatda-tmp.allthreads | sed -E 's/^"(.*)" os_prio=.*/\1/g' | sort | uniq > $FILE_NAME.yatda-tmp.gc-threads
     COUNT=`cat $FILE_NAME.yatda-tmp.gc-threads | wc -l`
     i=1
@@ -501,7 +486,7 @@ if [ "$JAVA_11" == "true" ]; then
                     THREAD_LINE="`echo $line2 | sed -E 's/^.*cpu=(.*) nid=.*/\1/g'`"
                     #THREAD_LINE="`echo $line2 | sed -E 's/^"(.*)"(.*)/\\"\1\\"\2/g'`"
                     #get the prior time stamp
-                    grep -E "($THREAD_LINE)|^20[0-9][0-9]\-" $FILE_NAME | grep -B 1 "$THREAD_LINE" >> $FILE_NAME.yatda-gc-cpu
+                    grep -E "($THREAD_LINE)|^20[0-9][0-9]\-" $TRIM_FILE | grep -B 1 "$THREAD_LINE" >> $FILE_NAME.yatda-gc-cpu
                     #sed "${i}q;d" $FILE_NAME.yatda-tmp.timestamps >> $FILE_NAME.yatda-gc-cpu
                     echo "TOTAL CPU: $NEW_CPU ms ELAPSED: $NEW_ELAPSED ms PERCENTAGE: $GC_PERCENTAGE" >> $FILE_NAME.yatda-gc-cpu
                     echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` ms PERCENTAGE: $GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda-gc-cpu
@@ -562,10 +547,10 @@ if [ "$JAVA_11" == "true" ]; then
                     echo "------------------------------------------------------------------------------" >> $FILE_NAME.yatda-cpu
                     THREAD_LINE="`echo $line2 | sed -E 's/^.*cpu=(.*)\[.*/\1/g'`"
                     #get the prior time stamp
-                    grep -E "($THREAD_LINE)|^20[0-9][0-9]\-" $FILE_NAME | grep -B 1 "$THREAD_LINE" >> $FILE_NAME.yatda-cpu
+                    grep -E "($THREAD_LINE)|^20[0-9][0-9]\-" $TRIM_FILE | grep -B 1 "$THREAD_LINE" >> $FILE_NAME.yatda-cpu
                     echo "TOTAL CPU: $NEW_CPU ms ELAPSED: $NEW_ELAPSED ms PERCENTAGE: $NON_GC_PERCENTAGE" >> $FILE_NAME.yatda-cpu
                     echo "DELTA CPU: `expr $NEW_CPU - $OLD_CPU` ms ELAPSED: `expr $NEW_ELAPSED - $OLD_ELAPSED` ms PERCENTAGE: $NON_GC_DELTA_PERCENTAGE" >> $FILE_NAME.yatda-cpu
-                    grep -A 10 -E "$THREAD_LINE" $FILE_NAME | grep -v "$THREAD_LINE" | sed -E '/^$.*/,+10d' >> $FILE_NAME.yatda-cpu
+                    grep -A 10 -E "$THREAD_LINE" $TRIM_FILE | grep -v "$THREAD_LINE" | sed -E '/^$.*/,+10d' >> $FILE_NAME.yatda-cpu
                     echo "------------------------------------------------------------------------------" >> $FILE_NAME.yatda-cpu
                     echo >> $FILE_NAME.yatda-cpu
                 fi
