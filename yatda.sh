@@ -334,6 +334,7 @@ echo | tee -a $FILE_NAME.yatda
 
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
+    sed -n "/$REQUEST_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.requests
     # This returns counts of the top line from all request thread stacks
     echo -en "${RED}"
     echo "## Top lines of request threads ##" | tee -a $FILE_NAME.yatda
@@ -345,12 +346,13 @@ if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.requests | grep -E " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
 
 if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
+    sed -n "/$SPECIFIED_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.specifics
     # This returns counts of the top line from all request thread stacks
     echo -en "${RED}"
     echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
@@ -362,7 +364,7 @@ if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.specifics | grep " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
