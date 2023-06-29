@@ -261,8 +261,11 @@ if [ "x$SPECIFIED_THREAD_NAME" != "x" ]; then
 
         if [ $DUMP_COUNT -gt 1 ]; then
             echo "Average number of in process $SPECIFIED_THREAD_NAME threads per thread dump: " `expr $SPECIFIED_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
-            echo "Average number of $SPECIFIED_THREAD_COUNT threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
         fi
+    fi
+
+    if [ $DUMP_COUNT -gt 1 ]; then
+            echo "Average number of $SPECIFIED_THREAD_COUNT threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
     fi
 fi
 #end stats
@@ -364,7 +367,7 @@ if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.specifics | grep " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.specifics | grep -E " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
