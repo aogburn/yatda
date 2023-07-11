@@ -287,7 +287,7 @@ if [[ $REQUEST_THREAD_COUNT -gt 0 && `expr $REQUEST_THREAD_COUNT % 16` == 0 ]]; 
 NUMBER_CORES=`expr $REQUEST_THREAD_COUNT / 16`
 NUMBER_CORES=`expr $NUMBER_CORES / $DUMP_COUNT`
     echo | tee -a $FILE_NAME.yatda
-    echo $i": The number of present request threads is a multple of 16 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores." | tee -a $FILE_NAME.yatda
+    echo $i": The number of present request threads is a multiple of 16 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores." | tee -a $FILE_NAME.yatda
     i=$((i+1))
 fi
 
@@ -418,7 +418,7 @@ if [ $COUNT -gt 0 ]; then
     if [[ `expr $COUNT % 2` == 0 ]]; then
         NUMBER_CORES=`expr $COUNT / 2`
         NUMBER_CORES=`expr $NUMBER_CORES / $DUMP_COUNT`
-        echo "*The number of present MSC threads is a multple of 2 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores. If these are all in use during start up, the thread pool may need to be increased via -Dorg.jboss.server.bootstrap.maxThreads and -Djboss.msc.max.container.threads properties per https://access.redhat.com/solutions/508413." >> $FILE_NAME.yatda
+        echo "*The number of present MSC threads is a multiple of 2 so this may be a default thread pool size fitting $NUMBER_CORES CPU cores. If these are all in use during start up, the thread pool may need to be increased via -Dorg.jboss.server.bootstrap.maxThreads and -Djboss.msc.max.container.threads properties per https://access.redhat.com/solutions/508413." >> $FILE_NAME.yatda
     fi
     echo "## Most common from first 10 lines of MSC threads ##" >> $FILE_NAME.yatda
     grep "MSC service thread " -A 11 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
