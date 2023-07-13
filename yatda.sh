@@ -530,7 +530,11 @@ if [ "$JAVA_11" == "true" ]; then
     while read -r line ; do
         NEW_CPU=""
         NEW_ELAPSED=""
+        # a helpful echo if needing to view and debug CPU processing activity
+        #echo $line
         while read -r line2; do
+            # a helpful echo if needing to view and debug CPU processing activity
+            #echo $line2
             OLD_CPU=$NEW_CPU
             OLD_ELAPSED=$NEW_ELAPSED
             NEW_CPU=`echo $line2 | sed -E 's/^.*cpu=([0-9]+)\..*/\1/g'`
@@ -564,7 +568,7 @@ if [ "$JAVA_11" == "true" ]; then
                     echo >> $FILE_NAME.yatda-cpu
                 fi
             fi
-        done < <(grep "$line" $FILE_NAME.yatda-tmp.allthreads)
+        done < <(grep "$line " $FILE_NAME.yatda-tmp.allthreads)
         printf "$i of $COUNT threads done\033[0K\r"
         i=$((i+1))
     done < <(cat $FILE_NAME.yatda-tmp.non-gc-threads)
