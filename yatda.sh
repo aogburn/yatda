@@ -341,7 +341,7 @@ echo | tee -a $FILE_NAME.yatda
 
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
-    sed -n "/$REQUEST_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.requests
+    sed -E -n "/$REQUEST_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.requests
     # This returns counts of the top line from all request thread stacks
     echo -en "${RED}"
     echo "## Top lines of request threads ##" | tee -a $FILE_NAME.yatda
@@ -359,7 +359,7 @@ fi
 
 
 if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
-    sed -n "/$SPECIFIED_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.specifics
+    sed -E -n "/$SPECIFIED_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.specifics
     # This returns counts of the top line from all request thread stacks
     echo -en "${RED}"
     echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
@@ -582,4 +582,4 @@ fi
 
 
 #clean up tmp files
-rm -f $FILE_NAME.yatda-tmp.*
+#rm -f $FILE_NAME.yatda-tmp.*
