@@ -582,4 +582,4 @@ fi
 
 
 #clean up tmp files
-#rm -f $FILE_NAME.yatda-tmp.*
+rm -f $FILE_NAME.yatda-tmp.*
