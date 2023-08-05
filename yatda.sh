@@ -223,30 +223,44 @@ DUMP_COUNT=`grep "$DUMP_NAME" $TRIM_FILE | wc -l`
 echo -en "${GREEN}"
 echo "Number of thread dumps: " $DUMP_COUNT | tee -a $FILE_NAME.yatda
 
+echo -en "${YELLOW}"
+{
+echo "Dump dates:"
+grep -B 1 "Full thread dump" $TRIM_FILE | grep "20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]" > $FILE_NAME.yatda-tmp.dates
+if [ $DUMP_COUNT -gt 20 ]; then
+    head -n 10 $FILE_NAME.yatda-tmp.dates
+    echo "..."
+    tail -n 10 $FILE_NAME.yatda-tmp.dates
+else
+    cat $FILE_NAME.yatda-tmp.dates
+fi
+} | tee -a $FILE_NAME.yatda
+
 grep "$ALL_THREAD_NAME" $TRIM_FILE > $FILE_NAME.yatda-tmp.allthreads
 THREAD_COUNT=`cat $FILE_NAME.yatda-tmp.allthreads | wc -l`
-echo -en "${YELLOW}"
+
+echo -en "${GREEN}"
 echo "Total number of threads: " $THREAD_COUNT | tee -a $FILE_NAME.yatda
 
 REQUEST_THREAD_COUNT=`cat $FILE_NAME.yatda-tmp.allthreads | grep -E "$REQUEST_THREAD_NAME" | wc -l`
-echo -en "${GREEN}"
+echo -en "${YELLOW}"
 echo "Total number of request threads: " $REQUEST_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     REQUEST_COUNT=`grep "$REQUEST_TRACE" $TRIM_FILE | wc -l`
-    echo -en "${YELLOW}"
+    echo -en "${GREEN}"
     echo "Total number of in process requests: " $REQUEST_COUNT | tee -a $FILE_NAME.yatda
 
     REQUEST_PERCENT=`printf %.2f "$((10**4 * $REQUEST_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
-    echo -en "${GREEN}"
+    echo -en "${YELLOW}"
     echo "Percent of present request threads in use for requests: " $REQUEST_PERCENT | tee -a $FILE_NAME.yatda
 
     if [ $DUMP_COUNT -gt 1 ]; then
-        echo -en "${YELLOW}"
-        echo "Average number of in process requests per thread dump: " `expr $REQUEST_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
         echo -en "${GREEN}"
-        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo "Average number of in process requests per thread dump: " `expr $REQUEST_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
         echo -en "${YELLOW}"
+        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo -en "${GREEN}"
         echo "Average number of threads per thread dump: " `expr $THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
     fi
 fi
@@ -346,7 +360,7 @@ if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Top lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$REQUEST_THREAD_NAME" -A 2 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$REQUEST_THREAD_NAME" -A 2 $TRIM_FILE.requests | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
@@ -364,7 +378,7 @@ if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
     echo -en "${RED}"
     echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$SPECIFIED_THREAD_NAME" -A 2 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "\"$SPECIFIED_THREAD_NAME" -A 2 $TRIM_FILE.specifics | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
