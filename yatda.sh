@@ -154,8 +154,13 @@ DIR=`dirname "$(readlink -f "$0")"`
 if [ "$UPDATE_MODE" != "never" ]; then
     echo "Checking script update. Use option '-u never' to skip the update check"
 
-    SUM=`md5sum $DIR/$YATDA_SH | awk '{ print $1 }'`
-    NEWSUM=$(curl -s $MD5)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+       SUM=`md5 -r $DIR/$YATDA_SH | awk '{ print $1 }'`
+    else
+       SUM=`md5sum $DIR/$YATDA_SH | awk '{ print $1 }'`
+    fi
+    
+    NEWSUM=`curl -s $MD5 | awk '{ print $1 }'`
 
     if [ "x$NEWSUM" != "x" ]; then
         if [ $SUM != $NEWSUM ]; then
