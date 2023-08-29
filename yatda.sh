@@ -361,43 +361,62 @@ echo | tee -a $FILE_NAME.yatda
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     sed -E -n "/$REQUEST_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.requests
-    # This returns counts of the top line from all request thread stacks
+    # This returns states of all request threads
+    echo -en "${RED}"
+    echo "## Request thread states ##" | tee -a $FILE_NAME.yatda
+    echo -en "${NC}"
+    awk -v name="$REQUEST_THREAD_NAME" '$0~name {getline; print}' $TRIM_FILE.requests | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
+
+    # This returns counts of the top line from all request thread stacks with their state
     echo -en "${RED}"
     echo "## Top lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$REQUEST_THREAD_NAME" -A 2 $TRIM_FILE.requests | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    awk -v name="$REQUEST_THREAD_NAME" '$0~name {getline; printf $0; getline; print}' $TRIM_FILE.requests | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
     # This returns counts of the unique 20 top lines from all request thread stacks
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of request threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.requests | grep -E " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.requests | grep -E " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
 
 if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
     sed -E -n "/$SPECIFIED_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.specifics
-    # This returns counts of the top line from all request thread stacks
+    # This returns states of all specified threads
+    echo -en "${RED}"
+    echo "## Specified thread states ##" | tee -a $FILE_NAME.yatda
+    echo -en "${NC}"
+    awk -v name="$SPECIFIED_THREAD_NAME" '$0~name {getline; print}' $TRIM_FILE.requests | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    echo | tee -a $FILE_NAME.yatda
+
+    # This returns counts of the top line from all specified thread stacks with their state
     echo -en "${RED}"
     echo "## Top lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$SPECIFIED_THREAD_NAME" -A 2 $TRIM_FILE.specifics | grep "at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    awk -v name="$SPECIFIED_THREAD_NAME" '$0~name {getline; printf $0; getline; print}' $TRIM_FILE.specifics | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 
-    # This returns counts of the unique 20 top lines from all request thread stacks
+    # This returns counts of the unique 20 top lines from all specified thread stacks
     echo -en "${RED}"
     echo "## Most common from first $SPECIFIED_LINE_COUNT lines of $SPECIFIED_THREAD_NAME threads ##" | tee -a $FILE_NAME.yatda
     echo -en "${NC}"
-    grep -E "\"$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.specifics | grep -E " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
+    grep -E "$SPECIFIED_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.specifics | grep -E " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
 fi
 
+# This returns states of all threads
+echo "## All thread states ##" >> $FILE_NAME.yatda
+echo -en "${NC}"
+awk -v name="$ALL_THREAD_NAME" '$0~name {getline; print}' $TRIM_FILE.requests | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+echo >> $FILE_NAME.yatda
 
-# This returns counts of the top line from all thread stacks
+# This returns counts of the top line from all thread stacks with their state
 echo "## Top lines of all threads ##" >> $FILE_NAME.yatda
-grep "$ALL_THREAD_NAME" -A 2 $TRIM_FILE | grep "at " | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+awk -v name="$ALL_THREAD_NAME" '$0~name {getline; printf $0; getline; print}' $TRIM_FILE | grep "Thread.State" | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
 echo >> $FILE_NAME.yatda
 
 # This returns counts of the unique 20 top lines from all request thread stacks
