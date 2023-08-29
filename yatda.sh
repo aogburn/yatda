@@ -10,6 +10,8 @@ DUMP_NAME="Full thread dump "
 ALL_THREAD_NAME=" nid=0x"
 REQUEST_THREAD_NAME="default task-"
 REQUEST_TRACE="io.undertow.server.Connectors.executeRootHandler"
+EJB_TRACE="org.jboss.ejb.protocol.remote.EJBServerChannel\$ReceiverImpl.handleInvocationRequest"
+IDLE_TRACE="(a org.jboss.threads.EnhancedQueueExecutor)"
 REQUEST_COUNT=0
 SPECIFIED_THREAD_COUNT=0
 SPECIFIED_USE_COUNT=0
@@ -252,31 +254,65 @@ echo -en "${YELLOW}"
 echo "Total number of request threads: " $REQUEST_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
-    REQUEST_COUNT=`grep "$REQUEST_TRACE" $TRIM_FILE | wc -l`
+    sed -E -n "/$REQUEST_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.requests
+    REQUEST_COUNT=`grep "$REQUEST_TRACE" $TRIM_FILE.requests | wc -l`
     echo -en "${GREEN}"
     echo "Total number of in process requests: " $REQUEST_COUNT | tee -a $FILE_NAME.yatda
 
-    REQUEST_PERCENT=`printf %.2f "$((10**4 * $REQUEST_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
+    EJB_COUNT=`grep "$EJB_TRACE" $TRIM_FILE.requests | wc -l`
     echo -en "${YELLOW}"
+    echo "Total number of in process remote EJBs: " $EJB_COUNT | tee -a $FILE_NAME.yatda
+
+    IDLE_COUNT=`grep "$IDLE_TRACE" $TRIM_FILE.requests | wc -l`
+    echo -en "${GREEN}"
+    echo "Total number of idle request threads: " $IDLE_COUNT | tee -a $FILE_NAME.yatda
+
+    IN_USE_COUNT=`expr $REQUEST_THREAD_COUNT - $IDLE_COUNT`
+    echo -en "${YELLOW}"
+    echo "Total number of in use request threads (requests, EJBs, or other tasks): " $IN_USE_COUNT | tee -a $FILE_NAME.yatda
+
+    REQUEST_PERCENT=`printf %.2f "$((10**4 * $REQUEST_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
+    echo -en "${GREEN}"
     echo "Percent of present request threads in use for requests: " $REQUEST_PERCENT | tee -a $FILE_NAME.yatda
+
+    EJB_PERCENT=`printf %.2f "$((10**4 * $EJB_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
+    echo -en "${YELLOW}"
+    echo "Percent of present request threads in use for remote EJBs: " $EJB_PERCENT | tee -a $FILE_NAME.yatda
+
+    IDLE_PERCENT=`printf %.2f "$((10**4 * $IDLE_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
+    echo -en "${GREEN}"
+    echo "Percent of present idle request threads: " $IDLE_PERCENT | tee -a $FILE_NAME.yatda
+
+    IN_USE_PERCENT=`printf %.2f "$((10**4 * $IN_USE_COUNT / $REQUEST_THREAD_COUNT ))e-2" `
+    echo -en "${YELLOW}"
+    echo "Percent of present request threads in use (requests, EJBs, or other tasks): " $IN_USE_PERCENT | tee -a $FILE_NAME.yatda
+
 
     if [ $DUMP_COUNT -gt 1 ]; then
         echo -en "${GREEN}"
         echo "Average number of in process requests per thread dump: " `expr $REQUEST_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
         echo -en "${YELLOW}"
-        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo "Average number of in process remote EJBs per thread dump: " `expr $EJB_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
         echo -en "${GREEN}"
+        echo "Average number of idle request threads per thread dump: " `expr $IDLE_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo -en "${YELLOW}"
+        echo "Average number of in use request threads per thread dump: " `expr $IN_USE_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo -en "${GREEN}"
+        echo "Average number of request threads per thread dump: " `expr $REQUEST_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+        echo -en "${YELLOW}"
         echo "Average number of threads per thread dump: " `expr $THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
     fi
 fi
 
 if [ "x$SPECIFIED_THREAD_NAME" != "x" ]; then
     echo | tee -a $FILE_NAME.yatda
+    sed -E -n "/$SPECIFIED_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.specifics
+
     SPECIFIED_THREAD_COUNT=`cat $FILE_NAME.yatda-tmp.allthreads | grep -E "$SPECIFIED_THREAD_NAME" | wc -l`
     echo "Total number of $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_THREAD_COUNT | tee -a $FILE_NAME.yatda
 
     if [[ "x$SPECIFIED_TRACE" != x && $SPECIFIED_THREAD_COUNT -gt 0 ]]; then
-        SPECIFIED_USE_COUNT=`grep "$SPECIFIED_TRACE" $TRIM_FILE | wc -l`
+        SPECIFIED_USE_COUNT=`grep "$SPECIFIED_TRACE" $TRIM_FILE.specifics | wc -l`
         echo "Total number of in process $SPECIFIED_THREAD_NAME threads: " $SPECIFIED_USE_COUNT | tee -a $FILE_NAME.yatda
 
         SPECIFIED_PERCENT=`printf %.2f "$((10**4 * $SPECIFIED_USE_COUNT / $SPECIFIED_THREAD_COUNT ))e-2" `
@@ -313,7 +349,6 @@ fi
 
 # request thread exhaustion
 if [ $REQUEST_COUNT -gt 0 ] && [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
-
     echo | tee -a $FILE_NAME.yatda
     echo $i": The number of processing requests is equal to the number of present request threads.  This may indicate thread pool exhaustion so the task-max-threads may need to be increased (https://access.redhat.com/solutions/2455451)." | tee -a $FILE_NAME.yatda
     i=$((i+1))
@@ -360,7 +395,6 @@ echo | tee -a $FILE_NAME.yatda
 
 
 if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
-    sed -E -n "/$REQUEST_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.requests
     # This returns states of all request threads
     echo -en "${RED}"
     echo "## Request thread states ##" | tee -a $FILE_NAME.yatda
@@ -385,7 +419,6 @@ fi
 
 
 if [ $SPECIFIED_THREAD_COUNT -gt 0 ]; then
-    sed -E -n "/$SPECIFIED_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.specifics
     # This returns states of all specified threads
     echo -en "${RED}"
     echo "## Specified thread states ##" | tee -a $FILE_NAME.yatda
