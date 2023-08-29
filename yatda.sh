@@ -415,6 +415,24 @@ if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     echo -en "${NC}"
     grep -E "$REQUEST_THREAD_NAME" -A `expr $SPECIFIED_LINE_COUNT + 1` $TRIM_FILE.requests | grep -E " at |	at " | sort | uniq -c | sort -nr | tee -a $FILE_NAME.yatda
     echo | tee -a $FILE_NAME.yatda
+
+    # This returns monitor stats from all request thread stacks
+    echo -en "${RED}"
+    echo "## Most common monitors of request threads ##" | tee -a $FILE_NAME.yatda
+    echo -en "${NC}"
+    grep -E "\- .*wait.*<0x.*" $TRIM_FILE.requests | grep -v "org.jboss.threads.EnhancedQueueExecutor" | sort | uniq -c | sort -nr > $FILE_NAME.yatda-tmp.monitors
+    while read -r line; do
+        {
+            echo $line
+            echo "Locked by:"
+            MONITOR_ID=`echo $line | sed -E 's/.*<0x(.*)>.*/\1/g'`
+            tac $TRIM_FILE.requests | sed -E -n "/locked <0x$MONITOR_ID/,/nid=/p" | tac
+            #MONITOR_OWNERS=`echo $MONITOR_OWNERS | sed -E 's/.*("default task-.*").*/\1/g'`
+            echo
+        } | tee -a $FILE_NAME.yatda
+    done < $FILE_NAME.yatda-tmp.monitors
+
+#sed -E -n "/$REQUEST_THREAD_NAME/,/java\.lang\.Thread\.run/p" $TRIM_FILE > $TRIM_FILE.requests
 fi
 
 
