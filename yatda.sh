@@ -319,12 +319,12 @@ if [ "x$SPECIFIED_THREAD_NAME" != "x" ]; then
         echo "Percent of present $SPECIFIED_THREAD_NAME threads in use: " $SPECIFIED_PERCENT | tee -a $FILE_NAME.yatda
 
         if [ $DUMP_COUNT -gt 1 ]; then
-            echo "Average number of in process $SPECIFIED_THREAD_NAME threads per thread dump: " `expr $SPECIFIED_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+            echo "Average number of in process $SPECIFIED_THREAD_NAME threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
         fi
     fi
 
     if [ $DUMP_COUNT -gt 1 ]; then
-            echo "Average number of $SPECIFIED_THREAD_COUNT threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
+            echo "Average number of $SPECIFIED_THREAD_NAME threads per thread dump: " `expr $SPECIFIED_THREAD_COUNT / $DUMP_COUNT` | tee -a $FILE_NAME.yatda
     fi
 fi
 #end stats
