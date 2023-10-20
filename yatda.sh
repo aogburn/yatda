@@ -11,7 +11,7 @@ ALL_THREAD_NAME=" nid=0x"
 REQUEST_THREAD_NAME="default task-"
 REQUEST_TRACE="io.undertow.server.Connectors.executeRootHandler"
 EJB_TRACE="org.jboss.ejb.protocol.remote.EJBServerChannel\$ReceiverImpl.handleInvocationRequest"
-IDLE_TRACE="(a org.jboss.threads.EnhancedQueueExecutor)"
+IDLE_TRACE="(a org.jboss.threads.EnhancedQueueExecutor)|ThreadPoolExecutor.getTask"
 REQUEST_COUNT=0
 SPECIFIED_THREAD_COUNT=0
 SPECIFIED_USE_COUNT=0
@@ -263,7 +263,7 @@ if [ $REQUEST_THREAD_COUNT -gt 0 ]; then
     echo -en "${YELLOW}"
     echo "Total number of in process remote EJBs: " $EJB_COUNT | tee -a $FILE_NAME.yatda
 
-    IDLE_COUNT=`grep "$IDLE_TRACE" $TRIM_FILE.requests | wc -l`
+    IDLE_COUNT=`grep -E "$IDLE_TRACE" $TRIM_FILE.requests | wc -l`
     echo -en "${GREEN}"
     echo "Total number of idle request threads: " $IDLE_COUNT | tee -a $FILE_NAME.yatda
 
