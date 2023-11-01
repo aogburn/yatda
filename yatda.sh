@@ -20,6 +20,7 @@ ALL_LINE_COUNT=10
 CPU_THRESHOLD=40
 GC_CPU_THRESHOLD=1
 JAVA_11="false"
+FILE_PREFIX="file://"
 
 # Colors
 export RED='\033[0;31m'
@@ -149,7 +150,7 @@ fi
 
 # after parsing the options, '$1' is the file name
 FILE_NAME=$1
-
+FULL_FILE_NAME=`readlink -f $FILE_NAME`
 
 # Check for a new yatda.sh if UPDATE_MODE is not 'never'
 DIR=`dirname "$(readlink -f "$0")"`
@@ -221,8 +222,8 @@ if [ `grep 'org.apache.tomcat.util' $TRIM_FILE | wc -l` -gt 0 ]; then
 fi
 
 
-echo -e "${RED}### Summarizing $FILE_NAME - see $FILE_NAME.yatda for more info ###${NC}"
-echo "### Summary of $FILE_NAME ###" > $FILE_NAME.yatda
+echo -e "${RED}### Summarizing $FILE_PREFIX$FULL_FILE_NAME - see file://$FULL_FILE_NAME.yatda for more info ###${NC}"
+echo "### Summary of $FILE_PREFIX$FULL_FILE_NAME ###" > $FILE_NAME.yatda
 
 # Here we'll whip up some thread usage stats
 
