@@ -627,9 +627,9 @@ if [ "$JAVA_11" == "true" ]; then
             #echo $line2
             OLD_CPU=$NEW_CPU
             OLD_ELAPSED=$NEW_ELAPSED
-            NEW_CPU=`echo $line2 | sed -E 's/^.*cpu=([0-9]+)\..*/\1/g'`
+            NEW_CPU=`echo $line2 | sed -E 's/^.*cpu=([0-9]+)[\.,].*/\1/g'`
             #converted elapsed from s to ms
-            NEW_ELAPSED="`echo $line2 | sed -E 's/^.*elapsed=([0-9]+)\.([0-9][0-9]).*/\1\2/g'`0"
+            NEW_ELAPSED="`echo $line2 | sed -E 's/^.*elapsed=([0-9]+)[\.,]([0-9][0-9]).*/\1\2/g'`0"
             # trim any leading 0
             NEW_ELAPSED="`echo $NEW_ELAPSED | sed -E 's/^0(.*)/\1/g'`"
 
