@@ -463,7 +463,7 @@ fi
 # This returns states of all threads
 echo "## All thread states ##" >> $FILE_NAME.yatda
 echo -en "${NC}"
-awk -v name="$ALL_THREAD_NAME" '$0~name {getline; print}' $TRIM_FILE.requests | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
+awk -v name="$ALL_THREAD_NAME" '$0~name {getline; print}' $TRIM_FILE | sed -E 's/java.lang.Thread.State: (.*)/\1/g' | sort | uniq -c | sort -nr >> $FILE_NAME.yatda
 echo >> $FILE_NAME.yatda
 
 # This returns counts of the top line from all thread stacks with their state
