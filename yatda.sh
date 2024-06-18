@@ -214,7 +214,7 @@ sed '/^Found .* Java-level deadlock/,/^Found [0-9] deadlock/d' $FILE_NAME > $TRI
 if [ `grep 'org.apache.tomcat.util' $TRIM_FILE | wc -l` -gt 0 ]; then
     echo "Treating as dump from JBossWeb or Tomcat"
         if [ "$REQUEST_THREAD_NAME" == "default task-" ]; then
-            REQUEST_THREAD_NAME="http-|ajp-"
+            REQUEST_THREAD_NAME="http-|ajp-|https-"
         fi
         if [ "$REQUEST_TRACE" == "io.undertow.server.Connectors.executeRootHandler" ]; then
             REQUEST_TRACE="org.apache.catalina.connector.CoyoteAdapter.service"
