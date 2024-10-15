@@ -516,7 +516,7 @@ fi
 
 
 # Handle java 11+ dump differently to process addtional CPU
-if [ `grep "$DUMP_NAME" $TRIM_FILE | grep -E "VM \(1[1-9]\." | wc -l` -gt 0 ]; then
+if [ `grep "$DUMP_NAME" $TRIM_FILE | grep -E "VM \(1[1-9]." | wc -l` -gt 0 ]; then
     JAVA_11="true"
 fi
 
