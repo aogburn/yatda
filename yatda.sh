@@ -7,7 +7,7 @@
 LC_ALL=C
 # default string references to search for generic EAP 7+ request stats
 DUMP_NAME="Full thread dump "
-ALL_THREAD_NAME=" nid=0x"
+ALL_THREAD_NAME=" nid=[0-9]"
 REQUEST_THREAD_NAME="default task-"
 REQUEST_TRACE="io.undertow.server.Connectors.executeRootHandler"
 EJB_TRACE="org.jboss.ejb.protocol.remote.EJBServerChannel\$ReceiverImpl.handleInvocationRequest"
