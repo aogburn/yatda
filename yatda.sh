@@ -349,7 +349,7 @@ fi
 
 
 # request thread exhaustion
-if [ $REQUEST_COUNT -gt 0 ] && [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
+if [ $REQUEST_THREAD_COUNT -gt 15 ] && [ $REQUEST_COUNT == $REQUEST_THREAD_COUNT ]; then
     echo | tee -a $FILE_NAME.yatda
     echo $i": The number of processing requests is equal to the number of present request threads.  This may indicate thread pool exhaustion so the task-max-threads may need to be increased (https://access.redhat.com/solutions/2455451).  Spikes in CPU on the I/O threads can also be a side effect of this thread exhaustion per https://access.redhat.com/solutions/7031598, which can be avoided with its noted workarounds." | tee -a $FILE_NAME.yatda
     i=$((i+1))
