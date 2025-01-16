@@ -15,7 +15,7 @@ When run, yatda will look for a new version to use and update itself with a simp
 
 * To run:
 ```
- ./yatda.sh -f <THREAD_DUMP_FILE_NAME>
+ ./yatda.sh <THREAD_DUMP_FILE_NAME>
 ```
 * This will produce a report to thread-dump-file-name.yatda. If there are multiple thread dumps in the file, this will look across them all collectively with reported averages. That can be helpful, but yatda reports from individual dumps to compare may also be helpful. Split the file to separate dumps quickly like so for separate thread dump files to run yatda on:
 ```
