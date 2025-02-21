@@ -516,7 +516,8 @@ fi
 
 
 # Handle java 11+ dump differently to process addtional CPU
-if [ `grep "$DUMP_NAME" $TRIM_FILE | grep -E "VM \(1[1-9]." | wc -l` -gt 0 ]; then
+if [ `head -n 1 $FILE_NAME.yatda-tmp.allthreads | grep "cpu=.*elapsed=.*tid=.*nid=.*" | wc -l` -gt 0 ]; then
+#if [ `grep "$DUMP_NAME" $TRIM_FILE | grep -E "VM \([1-9][0-9]." | wc -l` -gt 0 ]; then
     JAVA_11="true"
 fi
 
@@ -614,20 +615,21 @@ if [ "$JAVA_11" == "true" ]; then
     echo "## high consumers above the $CPU_THRESHOLD% CPU threshold (-c flag to adjust) ## ##" >> $FILE_NAME.yatda-cpu
     echo >> $FILE_NAME.yatda-cpu
 
-    grep -v -E "\"$GC_THREAD_NAMES" $FILE_NAME.yatda-tmp.allthreads | sed -E 's/^".* nid=0x([[:alnum:]]*) .*/0x\1/g' | sort | uniq > $FILE_NAME.yatda-tmp.non-gc-threads
+    grep -v -E "\"$GC_THREAD_NAMES" $FILE_NAME.yatda-tmp.allthreads | sed -E 's/^".* nid=([[:alnum:]]*) .*/\1/g' | sort | uniq > $FILE_NAME.yatda-tmp.non-gc-threads
     COUNT=`cat $FILE_NAME.yatda-tmp.non-gc-threads | wc -l`
     i=1
     while read -r line ; do
         NEW_CPU=""
         NEW_ELAPSED=""
         # a helpful echo if needing to view and debug CPU processing activity
-        #echo $line
+        #echo line 1 $line
         while read -r line2; do
             # a helpful echo if needing to view and debug CPU processing activity
-            #echo $line2
+            #echo line 2 $line2
             OLD_CPU=$NEW_CPU
             OLD_ELAPSED=$NEW_ELAPSED
             NEW_CPU=`echo $line2 | sed -E 's/^.*cpu=([0-9]+)[\.,].*/\1/g'`
+            #echo "$NEW_CPU $OLD_CPU"
             #converted elapsed from s to ms
             NEW_ELAPSED="`echo $line2 | sed -E 's/^.*elapsed=([0-9]+)[\.,]([0-9][0-9]).*/\1\2/g'`0"
             # trim any leading 0
